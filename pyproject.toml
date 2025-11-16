@@ -1,0 +1,24 @@
+# Configuration file for packaging
+
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "EphysGPT"
+version = "0.0.1"
+description = "Foundation models for electrophysiolgical data"
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Linux",
+]
+
+[project.urls]
+Homepage = "https://github.com/OHBA-analysis/EphysGPT"
+Issues = "https://github.com/OHBA-analysis/EphysGPT/issues"
+
+[tool.setuptools.packages.find]
+include = ["egpt"]
