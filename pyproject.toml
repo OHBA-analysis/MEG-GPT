@@ -1,24 +1,34 @@
-# Configuration file for packaging
-
-[build-system]
-requires = ["setuptools>=61", "wheel"]
-build-backend = "setuptools.build_meta"
-
 [project]
 name = "EphysGPT"
-version = "0.0.1"
-description = "Foundation models for electrophysiolgical data"
-readme = "README.md"
-requires-python = ">=3.10"
-classifiers = [
-    "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
-    "Operating System :: Linux",
+version = "0.1.0"
+authors = [
+  { name = "SungJun Cho", email = "sungjun.cho@ndcn.ox.ac.uk" },
+  { name = "Chetan Gohil", email = "chetan.gohil@psych.ox.ac.uk" },
+  { name = "Mark Woolrich", email = "mark.woolrich@ohba.ox.ac.uk" },
 ]
+description = "EphysGPT: Foundation Models for Non-invasive Human Electrophysiology Data"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+dependencies = [
+  "torch",
+  "numpy",
+  "scikit-learn",
+]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ephys_gpt"]
 
 [project.urls]
 Homepage = "https://github.com/OHBA-analysis/EphysGPT"
 Issues = "https://github.com/OHBA-analysis/EphysGPT/issues"
-
-[tool.setuptools.packages.find]
-include = ["egpt"]
