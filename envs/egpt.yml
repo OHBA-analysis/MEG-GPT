@@ -11,6 +11,8 @@ dependencies:
   - torchvision
   - torchaudio
   - pytorch-cuda=12.1
+  - pytorch-lightning
+  - tensorboard
   - numpy
   - scipy
   - matplotlib
@@ -18,3 +20,6 @@ dependencies:
   - scikit-learn
   - pip:
       - mne
+      - pqdm
+      - hydra-core
+      - einops
