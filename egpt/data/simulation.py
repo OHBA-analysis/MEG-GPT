@@ -18,9 +18,9 @@ import seaborn as sns
 import warnings
 from tqdm import tqdm
 from typing import List, Tuple, Union
-from egpt.utils.array_ops import get_one_hot
-from egpt.utils.processing import time_delay_embed, standardize
-from egpt.utils.post_hoc import functional_connectivity
+from ephys_gpt.utils.array_ops import get_one_hot
+from ephys_gpt.utils.processing import time_delay_embed, standardize
+from ephys_gpt.utils.post_hoc import functional_connectivity
 
 
 _logger = logging.getLogger(__name__)

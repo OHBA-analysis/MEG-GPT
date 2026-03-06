@@ -6,7 +6,7 @@ import numpy as np
 from pqdm.threads import pqdm
 from sklearn.covariance import LedoitWolf
 from tqdm.auto import trange
-from egpt.utils import array_ops
+from ephys_gpt.utils import array_ops
 
 
 _logger = logging.getLogger(__name__)

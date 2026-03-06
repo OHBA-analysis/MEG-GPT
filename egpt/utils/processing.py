@@ -2,7 +2,7 @@
 
 # Import packages
 import numpy as np
-from egpt.utils.array_ops import sliding_window_view
+from ephys_gpt.utils.array_ops import sliding_window_view
 
 
 def standardize(
