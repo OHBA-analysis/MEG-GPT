@@ -236,8 +236,13 @@ class TDEBurstSimulation:
 
         # Reshape TDE covariance matrix
         tde_cov = tde_cov.reshape(C, E, C, E)
+        tde_cov = tde_cov[:, ::-1, :, ::-1]  # reverse embedding dimensions
         tde_cov = np.transpose(tde_cov, [1, 0, 3, 2])
         tde_cov = tde_cov.reshape(E * C, E * C)
+        # NOTE: Reversing embeddings converts lag-order to chronological to align with the mathematical partitioning.
+        #       `time_delay_embed` outputs in lag-order [Present, Past-1, Past-2]. However, our Schur complement expects
+        #       chronological order [Past-2, Past-1, Present] so that `Sig22 = tde_cov[-C:, -C:]` correctly isolates the "Present" timepoint.
+        #       Without this flip, the AR model generates the time series backward.
 
         # Partition covariance matrix
         Sig11 = tde_cov[:-C, :-C]  # ((E-1)*C, (E-1)*C)
@@ -653,7 +658,7 @@ def _plot_tde_conn(
         The mode time courses. Shape must be (T, M).
     true_tde_conns : List[np.ndarray]
         The true TDE connectivity matrices for each mode.
-        Each element has shape (C, C).
+        Each element has shape (CE, CE).
     n_embeddings : int
         The number of embeddings.
     conn_type : str, optional
@@ -663,7 +668,7 @@ def _plot_tde_conn(
     """
     # Get number of modes and channels
     n_modes = len(true_tde_conns)
-    n_channels = data.shape[0] // n_embeddings
+    n_channels = data.shape[1]
 
     # Compute TDE connectivity matrices for the generated data
     def _get_tde_conn(x: np.ndarray, n_embeddings: int) -> np.ndarray:
@@ -681,8 +686,8 @@ def _plot_tde_conn(
     fig, axes = plt.subplots(2, n_modes, figsize=(5 * n_modes, 8))
 
     for i in range(n_modes):
-        true_conn = true_tde_conns[i]
-        gen_conn = gen_tde_conns[i]
+        true_conn = true_tde_conns[i].copy()
+        gen_conn = gen_tde_conns[i].copy()
 
         # Zero out (n_embeddings x n_embeddings) diagonal blocks
         for c in range(n_channels):
