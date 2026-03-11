@@ -17,7 +17,7 @@ import os
 import seaborn as sns
 import warnings
 from tqdm import tqdm
-from typing import List, Tuple, Union
+from typing import List, Optional, Tuple, Union
 from ephys_gpt.utils.array_ops import get_one_hot
 from ephys_gpt.utils.processing import time_delay_embed, standardize
 from ephys_gpt.utils.post_hoc import functional_connectivity
@@ -44,8 +44,8 @@ class HMM:
     def __init__(
         self,
         trans_prob: Union[np.ndarray, str],
-        stay_prob: float = None,
-        n_states: int = None,
+        stay_prob: Optional[float] = None,
+        n_states: Optional[int] = None,
     ):
         if isinstance(trans_prob, np.ndarray):
             if trans_prob.ndim != 2:
@@ -172,6 +172,11 @@ class TDEBurstSimulation:
         Probability of staying in the same state in the HMM.
     data_dir : str, optional
         Directory to save simulated data.
+    rho : float, optional
+        Ridge (Tikhonov) regularization parameter.
+        It is added to the diagonal of `Sig11` before computing its 
+        pseudo-inverse to improve numerical stability and guarantee
+        positive definiteness.
     """
     def __init__(
         self,
@@ -181,7 +186,7 @@ class TDEBurstSimulation:
         n_embeddings: int = 1,
         sampling_frequency: int = 100,
         stay_prob: float = 0.98,
-        data_dir: str = None,
+        data_dir: Optional[str] = None,
         rho: float = 0.1,
     ):
         # Set parameters
