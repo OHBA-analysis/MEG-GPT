@@ -3,9 +3,13 @@
 # Import packages
 import logging
 import numpy as np
+import pandas as pd
+import pickle
+from pathlib import Path
 from pqdm.threads import pqdm
 from sklearn.covariance import LedoitWolf
 from tqdm.auto import trange
+from typing import Optional, Dict
 from ephys_gpt.utils import array_ops
 
 
@@ -150,3 +154,65 @@ def functional_connectivity(
         results = pqdm(data, measure, n_jobs=n_jobs)
 
     return np.squeeze(results)
+
+
+def get_history(
+    log_dir: str, save_dir: Optional[str] = None
+) -> Dict[str, np.ndarray]:
+    """
+    Loads training history from a CSV log file.
+
+    Parameters
+    ----------
+    log_dir : str
+        Directory containing the log files.
+    save_dir : str, optional
+        Directory to save the training history pickle file.
+        If None, the history will not be saved.
+
+    Returns
+    -------
+    history : Dict[str, np.ndarray]
+        Dictionary containing the training history.
+    """
+    # Read metric log file
+    log_path = Path(log_dir) / "metrics.csv"
+    if log_path.exists():
+        df = pd.read_csv(log_path)
+    else:
+        raise FileNotFoundError(
+            f"No metrics.csv found in {log_dir}. Cannot load training history."
+        )
+
+    # Initialize history
+    history = {}
+    to_npy = lambda x: x.dropna().to_numpy()
+    # NOTE: We use `.dropna()` to remove the interleaved NaN values. During training,
+    #       validation metrics are logged as NaN; during validation, training metrics
+    #       are logged as NaN.
+
+    # Collect training history
+    history["loss"] = to_npy(df["train/loss"])
+    history["cross_entropy_loss"] = to_npy(df["train/cross_entropy_loss"])
+    history["lyapunov_loss"] = to_npy(df["train/lyapunov_loss"])
+    for col in df.columns:
+        if col.startswith("train/") and col.endswith("_acc"):
+            key = col.replace("train/", "")
+            history[key] = to_npy(df[col])
+
+    # Collect validation history
+    history["val_loss"] = to_npy(df["val/loss"])
+    history["val_cross_entropy_loss"] = to_npy(df["val/cross_entropy_loss"])
+    history["val_lyapunov_loss"] = to_npy(df["val/lyapunov_loss"])
+    for col in df.columns:
+        if col.startswith("val/") and col.endswith("_acc"):
+            key = col.replace("val/", "val_")
+            history[key] = to_npy(df[col])
+
+    # Save history
+    if save_dir:
+        save_path = Path(save_dir) / "history.pkl"
+        with open(save_path, "wb") as f:
+            pickle.dump(history, f)
+
+    return history
