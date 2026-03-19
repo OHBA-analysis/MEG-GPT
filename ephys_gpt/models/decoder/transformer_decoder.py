@@ -327,14 +327,16 @@ class TransformerDecoder(nn.Module):
             # If a random float is less than the dropout threshold, drop the channel branch
             if torch.rand(1).item() < self.full_channel_attention_dropout:
                 chan_weight = 0.0
-            # else:
-            #     # Scale up by 1 / (1 - p) to maintain expected value
-            #     chan_weight = 1.0 / (1.0 - self.full_channel_attention_dropout)
-            #     # NOTE: Inverted dropout applied to compensate for the fact that more signals
-            #     #       will be active during evaluation. This keeps the training and evaluation
-            #     #       distributions aligned.
-            #     #       E[logit_train] = (1 - q) * 0 + q * (x / q) = x = E[logit_eval]
-            #     #       where q is 1 - dropout_rate.
+            else:
+                # Scale up by 1 / (1 - p) to maintain expected value
+                chan_weight = 1.0 / (1.0 - self.full_channel_attention_dropout)
+                # NOTE: Inverted dropout applied to compensate for the fact that more signals
+                #       will be active during evaluation. This keeps the training and evaluation
+                #       distributions aligned.
+                #       E[logit_train] = (1 - q) * 0 + q * (x / q) = x = E[logit_eval]
+                #       where q is 1 - dropout_rate.
+                # NOTE: This is done automatically by the Dropout layer in PyTorch. It might be
+                #       worth using the Dropout layer instead of this manual implementation.
 
         for layer in self.layers:
             x = layer(x, chan_attention_weight=chan_weight)
