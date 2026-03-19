@@ -103,7 +103,7 @@ class GASPAttention(nn.Module):
     With sparse banding, attention is focused on a limited context window,
     allowing for more efficient computation. The sparse banding window sizes
     for patch and unpatch are:
-        - Patched window: l_patched_b * 2 - 1
+        - Patched window: l_patched_b * 2 + 1
         - Unpatched window: l_unpatched_b * 2 + 1
 
     Parameters
@@ -206,7 +206,7 @@ class GASPAttention(nn.Module):
                 for j in range(self.l_out):
                     lower = j // self.patch_len_in - self.l_patched_b
                     upper = j // self.patch_len_in + self.l_patched_b
-                    if i <= lower or i >= upper:  # POTENTIAL BUG
+                    if i < lower or i > upper:
                         mask[j, i] = True
 
         if self.causal:
