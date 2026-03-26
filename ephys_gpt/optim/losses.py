@@ -68,8 +68,10 @@ class CrossEntropyLoss(nn.Module):
 
         # Compute cross-entropy loss
         y_pred_loss_tp = y_pred_loss.permute(0, 3, 1, 2)  # shape: (B, N_t, loss_sequence_length, C)
-        ce_loss = F.cross_entropy(y_pred_loss_tp, y_true_loss)  # mean over batch, time, and channels
+        ce_loss = F.cross_entropy(y_pred_loss_tp, y_true_loss, reduction="none")
         # shape: (B, loss_sequence_length, C)
+
+        loss = ce_loss.mean()  # mean over batch, time, and channels
 
         # Compute top-k accuracies
         metrics = {}
