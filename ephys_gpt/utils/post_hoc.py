@@ -194,7 +194,6 @@ def get_history(
     # Collect training history
     history["loss"] = to_npy(df["train/loss"])
     history["cross_entropy_loss"] = to_npy(df["train/cross_entropy_loss"])
-    history["lyapunov_loss"] = to_npy(df["train/lyapunov_loss"])
     for col in df.columns:
         if col.startswith("train/") and col.endswith("_acc"):
             key = col.replace("train/", "")
@@ -203,7 +202,6 @@ def get_history(
     # Collect validation history
     history["val_loss"] = to_npy(df["val/loss"])
     history["val_cross_entropy_loss"] = to_npy(df["val/cross_entropy_loss"])
-    history["val_lyapunov_loss"] = to_npy(df["val/lyapunov_loss"])
     for col in df.columns:
         if col.startswith("val/") and col.endswith("_acc"):
             key = col.replace("val/", "val_")
