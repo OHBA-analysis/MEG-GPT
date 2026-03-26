@@ -9,3 +9,7 @@ Icon[^M]
 
 # Log directories
 logs/
+
+# Results and analysis files
+*.png
+*.log
