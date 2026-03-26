@@ -16,15 +16,15 @@ import os
 import pytorch_lightning as pl
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from glob import glob
 from omegaconf import OmegaConf
 from typing import Dict, List, Optional
 from ephys_gpt.configs import Config, get_config
 from ephys_gpt.models import InputEmbeddingLayer, TransformerDecoder
 from ephys_gpt.models.utils import ShiftTokenLayer
-from ephys_gpt.optim.losses import CrossEntropyLoss, LyapunovLoss
+from ephys_gpt.optim.losses import CrossEntropyLoss
 from ephys_gpt.optim.optimizer import resolve_optimizer
+from ephys_gpt.optim.initializer import init_model_weights
 
 
 logging.basicConfig(level=logging.INFO)
@@ -97,19 +97,9 @@ class EphysGPT(nn.Module):
         self.cross_entropy_loss = CrossEntropyLoss(
             loss_cfg.loss_sequence_length, loss_cfg.top_k,
         )
-        self.lyapunov_loss = LyapunovLoss(
-            loss_cfg.loss_sequence_length,
-            (self.config.n_channels * emb_cfg.embedding_dim),
-            loss_cfg.lyapunov_beta,
-            loss_cfg.lyapunov_mu,
-            loss_cfg.lyapunov_collapse_weight,
-            loss_cfg.lyapunov_collapse_target_mean,
-            loss_cfg.lyapunov_collapse_target_var,
-            loss_cfg.lyapunov_dim,
-        )
 
-        # # Initialize model weights
-        # init_model_weights(self)
+        # Initialize model weights
+        init_model_weights(self)
 
     def forward(
         self,
@@ -146,40 +136,16 @@ class EphysGPT(nn.Module):
         y_pred_logits = self.prediction_head(decoder_output)
         # shape: (B, l_out, C, N_t)
 
-        # Gumbel-Softmax sampling to get predicted tokens
-        y_pred_soft = F.gumbel_softmax(y_pred_logits, tau=1.0, hard=True, dim=-1)
-        # NOTE: Setting `hard=True` uses the Straight-Through Estimator (STE).
-        # shape: (B, l_out, C, N_t)
-
-        # Soft embedding lookup
-        embedding_matrix = self.input_embedding_layer.token_embed.base_module.weight
-        # shape: (N_t, E)
-        y_pred_soft_embeddings = torch.matmul(y_pred_soft, embedding_matrix)
-        y_pred_soft_embeddings = self.input_embedding_layer.token_embed.proj(
-            y_pred_soft_embeddings
-        )
-        # shape: (B, l_out, C, E)
-
-        # Directly gather input embeddings to avoid large one-hot allocations
-        x_input_token_embeddings = F.embedding(input, embedding_matrix)
-        x_input_token_embeddings = self.input_embedding_layer.token_embed.proj(
-            x_input_token_embeddings
-        )
-        # shape: (B, l_out, C, E)
-
         # Compute losses
         ce_loss, _, ce_metrics = self.cross_entropy_loss(y_pred_logits, target)
-        lyapunov_loss, _, lyap_metrics = self.lyapunov_loss(y_pred_soft_embeddings, x_input_token_embeddings)
 
         return {
             "logits": y_pred_logits,
+            "total_loss": ce_loss,
             "cross_entropy_loss": ce_loss,
-            "lyapunov_loss": lyapunov_loss,
-            "total_loss": ce_loss + lyapunov_loss,
             "cross_entropy_metrics": ce_metrics,
-            "lyapunov_metrics": lyap_metrics,
         }
-    
+
     def get_embeddings(self) -> Dict[str, torch.Tensor]:
         """
         Gets embeddings weights from the model (as detached CPU tensors).
@@ -258,13 +224,10 @@ class EphysGPTModule(pl.LightningModule):
 
         self.log("train/loss", outputs["total_loss"], **log_kwargs)
         self.log("train/cross_entropy_loss", outputs["cross_entropy_loss"], **log_kwargs)
-        self.log("train/lyapunov_loss", outputs["lyapunov_loss"], **log_kwargs)
         # NOTE: on_epoch logs the mean across all steps (batches) in the epoch.
 
         # Automatically log all the sub-metrics from each loss layer
         for metric_name, metric_val in outputs["cross_entropy_metrics"].items():
-            self.log(f"train/{metric_name}", metric_val, **log_kwargs)
-        for metric_name, metric_val in outputs["lyapunov_metrics"].items():
             self.log(f"train/{metric_name}", metric_val, **log_kwargs)
         
         return outputs["total_loss"]
@@ -289,13 +252,10 @@ class EphysGPTModule(pl.LightningModule):
 
         self.log("val/loss", outputs["total_loss"], **log_kwargs)
         self.log("val/cross_entropy_loss", outputs["cross_entropy_loss"], **log_kwargs)
-        self.log("val/lyapunov_loss", outputs["lyapunov_loss"], **log_kwargs)
         # NOTE: on_epoch logs the mean across all steps (batches) in the epoch.
 
         # Automatically log all the sub-metrics from each loss layer
         for metric_name, metric_val in outputs["cross_entropy_metrics"].items():
-            self.log(f"val/{metric_name}", metric_val, **log_kwargs)
-        for metric_name, metric_val in outputs["lyapunov_metrics"].items():
             self.log(f"val/{metric_name}", metric_val, **log_kwargs)
 
         return outputs["total_loss"]

@@ -47,12 +47,6 @@ class TransformerDecoderConfig:
 class LossConfig:
     loss_sequence_length: Optional[int] = None
     top_k: Optional[List[int]] = None
-    lyapunov_beta: float = 0.0
-    lyapunov_mu: float = 10.0
-    lyapunov_collapse_weight: float = 0.0
-    lyapunov_collapse_target_mean: float = 1e-4
-    lyapunov_collapse_target_var: float = 1e-4
-    lyapunov_dim: int = 16
 
 
 @dataclass
@@ -66,12 +60,6 @@ class TrainingConfig:
     n_epochs: int = 10
     val_split: float = 0.1
     multi_gpu: bool = False
-
-
-@dataclass
-class CallbackConfig:
-    lyapunov_beta_scheduler: Optional[Dict[str, Any]] = None
-    lyapunov_mu_scheduler: Optional[Dict[str, Any]] = None
 
 
 @dataclass
@@ -101,9 +89,6 @@ class EphysGPTConfig:
     # Training defaults
     training: TrainingConfig = field(default_factory=TrainingConfig)
 
-    # Callback defaults
-    callback: CallbackConfig = field(default_factory=CallbackConfig)
-
     def set_config(self, config: DictConfig) -> None:
         self.sequence_length = config.get("sequence_length", self.sequence_length)
         self.n_channels = config.get("n_channels", self.n_channels)
@@ -112,7 +97,6 @@ class EphysGPTConfig:
         self._set_loss_config(config.get("loss", self.loss))
         self._set_decoder_config(config.get("transformer_decoder", self.transformer_decoder))
         self._set_training_config(config.get("training", self.training))
-        self._set_callback_config(config.get("callback", self.callback))
 
     def _set_input_config(self, config: DictConfig) -> None:
         self.input_embedding = OmegaConf.merge(
@@ -151,46 +135,12 @@ class EphysGPTConfig:
             OmegaConf.structured(self.transformer_decoder), config
         )
 
-    def _set_callback_config(self, config: DictConfig) -> None:
-        if "lyapunov_beta_scheduler" in config:
-            default_lb_dict = {
-                "ce_loss_metric": "train/cross_entropy_loss",
-                "lyap_loss_metric": "train/lyapunov_loss",
-                "target_ratio": 0.1,
-                "adaptation_rate": 0.1,
-                "min_beta": 1e-6,
-                "max_beta": 10.0,
-                "warmup_epochs": 0,
-                "ema_decay": 0.9,
-                "eps": 1e-12,
-            }
-            config.lyapunov_beta_scheduler = config.get("lyapunov_beta_scheduler", default_lb_dict)
-
-        if "lyapunov_mu_scheduler" in config:
-            default_lm_dict = {
-                "stability_loss_metric": "train/lyapunov_stability_loss",
-                "v0_loss_metric": "train/lyapunov_v0_loss",
-                "target_ratio": 0.1,
-                "adaptation_rate": 0.1,
-                "min_mu": 1e-6,
-                "max_mu": 100.0,
-                "warmup_epochs": 0,
-                "ema_decay": 0.9,
-                "eps": 1e-12,
-            }
-            config.lyapunov_mu_scheduler = config.get("lyapunov_mu_scheduler", default_lm_dict)
-
-        self.callback = OmegaConf.merge(
-            OmegaConf.structured(self.callback), config
-        )
-
     def validate(self) -> None:
         self._validate_base_config()
         self._validate_input_config()
         self._validate_decoder_config()
         self._validate_loss_config()
         self._validate_training_config()
-        self._validate_callback_config()
 
     def _validate_base_config(self) -> None:
         assert self.sequence_length is not None, "sequence_length must be set"
@@ -283,24 +233,6 @@ class EphysGPTConfig:
         assert (
             cfg.loss_sequence_length > 0
         ), "loss_sequence_length must be greater than 0"
-        assert (
-            cfg.lyapunov_beta >= 0
-        ), "lyapunov_beta must be greater than or equal to 0"
-        assert (
-            cfg.lyapunov_mu >= 0
-        ), "lyapunov_mu must be greater than or equal to 0"
-        assert (
-            cfg.lyapunov_collapse_weight >= 0
-        ), "lyapunov_collapse_weight must be greater than or equal to 0"
-        assert (
-            cfg.lyapunov_collapse_target_mean >= 0
-        ), "lyapunov_collapse_target_mean must be greater than or equal to 0"
-        assert (
-            cfg.lyapunov_collapse_target_var >= 0
-        ), "lyapunov_collapse_target_var must be greater than or equal to 0"
-        assert (
-            cfg.lyapunov_dim > 0
-        ), "lyapunov_dim must be greater than 0"
 
     def _validate_training_config(self) -> None:
         cfg = self.training
@@ -308,26 +240,3 @@ class EphysGPTConfig:
         assert cfg.batch_size > 0, "batch_size must be greater than 0"
         assert cfg.n_epochs > 0, "n_epochs must be greater than 0"
         assert 0 < cfg.val_split < 1, "val_split must be between 0 and 1"
-
-    def _validate_callback_config(self) -> None:
-        cfg = self.callback
-
-        if cfg.lyapunov_beta_scheduler is not None:
-            lbs = cfg.lyapunov_beta_scheduler
-            assert lbs.ce_loss_metric == "train/cross_entropy_loss", "ce_loss_metric must be set to 'train/cross_entropy_loss'"
-            assert lbs.lyap_loss_metric == "train/lyapunov_loss", "lyap_loss_metric must be set to 'train/lyapunov_loss'"
-            
-            assert (0 < lbs.target_ratio < 1), "target_ratio must be between 0 and 1"
-            assert (0 < lbs.adaptation_rate < 1), "adaptation_rate must be between 0 and 1"
-            assert (0 < lbs.ema_decay < 1), "ema_decay must be between 0 and 1"
-            assert (0 < lbs.min_beta < lbs.max_beta), "min_beta must be less than max_beta"
-
-        if cfg.lyapunov_mu_scheduler is not None:
-            lms = cfg.lyapunov_mu_scheduler
-            assert lms.stability_loss_metric == "train/lyapunov_stability_loss", "stability_loss_metric must be set to 'train/lyapunov_stability_loss'"
-            assert lms.v0_loss_metric == "train/lyapunov_v0_loss", "v0_loss_metric must be set to 'train/lyapunov_v0_loss'"
-
-            assert (0 < lms.target_ratio < 1), "target_ratio must be between 0 and 1"
-            assert (0 < lms.adaptation_rate < 1), "adaptation_rate must be between 0 and 1"
-            assert (0 < lms.ema_decay < 1), "ema_decay must be between 0 and 1"
-            assert (0 < lms.min_mu < lms.max_mu), "min_mu must be less than max_mu"
