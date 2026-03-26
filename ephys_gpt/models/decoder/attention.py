@@ -80,10 +80,13 @@ class Attention(nn.Module):
             # PyTorch broadcasts the mask (l_out, l_in) to match attn shape
             attn = attn.masked_fill(mask, float("-inf"))
 
-            # # (Optional) Replace NaNs with 0 if there are fully-masked rows
-            # attn = torch.nan_to_num(attn, nan=0.0)
-
         attn = F.softmax(attn, dim=-1)  # normalize with softmax
+
+        # Replace NaNs with 0 if there are fully-masked rows
+        attn = torch.nan_to_num(attn, nan=0.0)
+        # NOTE: This can happen when l_out > l_in and the mask fully masks out some query positions.
+        #       In that case, softmax returns NaN for those positions, which we replace with 0 to 
+        #       avoid propagating NaNs through the output.
 
         # Apply attention weights to values
         output = attn @ v
