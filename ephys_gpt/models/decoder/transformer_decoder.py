@@ -206,7 +206,7 @@ class DecoderLayer(nn.Module):
             x_residual = x_time
 
             x_time = self.gasp_cross_attention(query=x_time, key=x_chan, value=x_chan)
-            
+
             out_len = x_time.size(1)
             x_time = x_time + x_residual[:, -out_len:, :, :]
 
@@ -310,7 +310,7 @@ class TransformerDecoder(nn.Module):
         ----------
         x : torch.Tensor
             Input tensor of shape (B, L, C, E).
-            
+
         Returns
         -------
         x : torch.Tensor
