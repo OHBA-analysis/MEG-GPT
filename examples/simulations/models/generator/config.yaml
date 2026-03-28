@@ -1,0 +1,73 @@
+# Main Script Settings
+main:
+  run_dir: ./models/generator  # directory to save checkpoints and logs
+  gpus: 1                      # number of GPUs to use (0 = CPU)
+  precision: 32                # precision level (16 or 32)
+  deterministic: True          # enable deterministic training
+  seed: 813                    # random seed
+  checkpoint: null             # path to a pre-trained model checkpoint (EDITED)
+
+# Dataset Settings
+data_config:
+  data_dir: null           # directory containing data to use
+  sampling_frequency: 100  # unit: Hz
+
+# EphysGPT Settings
+model_config:
+
+  # Meta data
+  name: ephys_gpt
+
+  # Base config
+  sequence_length: 100
+  n_channels: 4
+
+  # Input embedding config
+  input_embedding:
+    n_tokens: 58
+    embedding_dim: 50
+    token_embedding_dim: 50
+    pos_embedding_dim: 50
+    pos_embedding_type: absolute
+    channel_embedding_dim: 4
+    extra_label_specs:
+      - label_dim: 20
+        n_classes: 10
+        name: subject_labels
+
+  # Transformer decoder config
+  transformer_decoder:
+    n_heads: 4
+    model_dim: 100
+    n_patches_out: [25, 10, 8]
+    patch_len_out: [4, 8, 1]
+    n_patches_in: [100, 25, 10]
+    patch_len_in: [1, 4, 8]
+    unpatched_len_in: [0, 0, 0]
+    l_unpatched_b: [null, null, null]
+    l_patched_b: [8, null, null]
+    do_chan_attention: [False, True, True]
+    do_cross_attention: [False, False, False]
+    chan_attention_mask: [null, null, null]
+    
+    full_channel_attention_dropout: 0.1
+    chan_attn_chandim: 2
+    feed_forward_dim: 100
+    feed_forward_activation: gelu
+    dropout: 0.2
+    norm_type: "layer"
+    n_groups: null
+
+  # Loss config
+  loss:
+    loss_sequence_length: 8
+    top_k: [1]
+
+  # Training config
+  training:
+    batch_size: 8
+    n_epochs: 25
+    val_split: 0.1
+    optimizer:
+      learning_rate: 1.0e-04
+    multi_gpu: False
