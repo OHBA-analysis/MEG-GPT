@@ -11,6 +11,9 @@ from sklearn.covariance import LedoitWolf
 from tqdm.auto import trange
 from typing import Optional, Dict
 from ephys_gpt.utils import array_ops
+from ephys_gpt.utils.processing import (
+    amplitude_envelope, moving_average, standardize, temporal_filter
+)
 
 
 _logger = logging.getLogger(__name__)
@@ -214,3 +217,64 @@ def get_history(
             pickle.dump(history, f)
 
     return history
+
+
+def compute_aec(
+    data: np.ndarray,
+    sampling_frequency: int,
+    low_freq: Optional[float] = None,
+    high_freq: Optional[float] = None,
+    n_window: Optional[int] = None,
+    do_standardize: bool = False,
+) -> np.ndarray:
+    """
+    Computes the amplitude envelope correlation (AEC) of the input data.
+
+    Parameters
+    ----------
+    data : np.ndarray
+        Input data array to compute AEC. Shape should be (n_samples, n_channels).
+    sampling_frequency : int
+        Sampling frequency of the input data.
+    low_freq : float
+        Lower frequency bound for bandpass filtering.
+    high_freq : float
+        Upper frequency bound for bandpass filtering.
+    n_window : int
+        Window size for moving average in samples. Must be odd.
+    do_standardize : bool
+        Whether to standardize the input data first.
+
+    Returns
+    -------
+    aec : np.ndarray
+        AEC matrix of shape (n_channels, n_channels).
+    """
+    # Standardize data
+    if do_standardize:
+        data = standardize(data, axis=0)
+
+    # Apply bandpass filter
+    if low_freq is not None or high_freq is not None:
+        data_filt = temporal_filter(
+            x=data,
+            sampling_frequency=sampling_frequency,
+            low_freq=low_freq,
+            high_freq=high_freq,
+        )
+    else:
+        data_filt = data
+
+    # Compute amplitude envelope
+    data_env = amplitude_envelope(data_filt)
+
+    # Apply moving average
+    if n_window is not None:
+        data_env_ma = moving_average(data_env, n_window=n_window)
+    else:
+        data_env_ma = data_env
+
+    # Compute correlation
+    aec = functional_connectivity(data_env_ma, conn_type="corr")
+
+    return aec
