@@ -39,10 +39,22 @@ def resolve_optimizer(
         name = optimizer_descriptor.get("name", "adam").lower()
         lr = optimizer_descriptor.get("learning_rate", 1e-3)
         eps = optimizer_descriptor.get("eps", 1e-7)
-        if "adam" in name:
+
+        if name == "adam":
             return optim.Adam(params, lr=lr, eps=eps)
-        if "sgd" in name:
+
+        if name == "adamw":
+            betas = optimizer_descriptor.get("betas", (0.9, 0.999))
+            if isinstance(betas, list):
+                betas = tuple(betas)
+            weight_decay = optimizer_descriptor.get("weight_decay", 0.01)
+            return optim.AdamW(
+                params, lr=lr, betas=betas, eps=eps, weight_decay=weight_decay
+            )
+
+        if name == "sgd":
             return optim.SGD(params, lr=lr)
+
         return optim.Adam(params, lr=lr, eps=eps)
 
     raise ValueError("Unsupported optimizer descriptor.")
