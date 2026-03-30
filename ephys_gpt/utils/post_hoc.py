@@ -201,6 +201,8 @@ def get_history(
         if col.startswith("train/") and col.endswith("_acc"):
             key = col.replace("train/", "")
             history[key] = to_npy(df[col])
+        if col == "train/learning_rate":
+            history["learning_rate"] = to_npy(df[col])
 
     # Collect validation history
     history["val_loss"] = to_npy(df["val/loss"])

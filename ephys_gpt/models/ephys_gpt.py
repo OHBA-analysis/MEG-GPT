@@ -23,7 +23,7 @@ from ephys_gpt.configs import Config, get_config
 from ephys_gpt.models import InputEmbeddingLayer, TransformerDecoder
 from ephys_gpt.models.utils import ShiftTokenLayer
 from ephys_gpt.optim.losses import CrossEntropyLoss
-from ephys_gpt.optim.optimizer import resolve_optimizer
+from ephys_gpt.optim.optimizer import resolve_optimizer, resolve_lr_scheduler
 from ephys_gpt.optim.initializer import init_model_weights
 
 
@@ -260,6 +260,19 @@ class EphysGPTModule(pl.LightningModule):
 
         return outputs["total_loss"]
 
+    def on_train_epoch_start(self):
+        """
+        Logs and prints the current learning rate at the start of each epoch.
+        """
+        optimizer = self.optimizers()
+        lr = optimizer.param_groups[0]["lr"]
+        _logger.info(f"Epoch {self.current_epoch} - learning_rate: {lr:.6g}")
+        self.log(
+            "train/learning_rate", lr,
+            on_epoch=True, prog_bar=False,
+            sync_dist=self.config.training.multi_gpu,
+        )
+
     def configure_optimizers(self):
         """
         Configures optimizers for training.
@@ -275,6 +288,16 @@ class EphysGPTModule(pl.LightningModule):
         # Get optimizer
         optim_description = self.config.training.optimizer
         optimizer = resolve_optimizer(self.parameters(), optim_description)
+
+        # Get learning rate scheduler
+        sched_description = getattr(self.config.training, "lr_scheduler", None)
+        if sched_description:
+            scheduler = resolve_lr_scheduler(optimizer, sched_description)
+            return {
+                "optimizer": optimizer,
+                "lr_scheduler": {"scheduler": scheduler, "interval": "epoch", "frequency": 1},
+            }
+
         return optimizer
 
     def fit(

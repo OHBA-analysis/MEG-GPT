@@ -56,6 +56,7 @@ class TrainingConfig:
         "learning_rate": 1e-3,
         "eps": 1e-7,
     })
+    lr_scheduler: Optional[Dict[str, Any]] = None
     batch_size: int = 32
     n_epochs: int = 10
     val_split: float = 0.1
