@@ -8,7 +8,7 @@ from omegaconf import DictConfig, OmegaConf
 from pathlib import Path
 
 import pytorch_lightning as pl
-from pytorch_lightning.loggers import CSVLogger
+from pytorch_lightning.loggers import CSVLogger, WandbLogger
 
 from ephys_gpt.configs import get_config
 from ephys_gpt.data.datasets import SimulationDataset
@@ -36,6 +36,7 @@ def main(cfg: DictConfig):
     deterministic = cfg.main.deterministic
     seed = cfg.main.seed
     checkpoint = cfg.main.checkpoint
+    wandb_cfg = cfg.main.get("wandb", {})
 
     # Set data config
     data_dir = cfg.data_config.data_dir
@@ -101,9 +102,25 @@ def main(cfg: DictConfig):
         # Build network via Lightning module
         pl_module = EphysGPTModule(model_config)
 
-        # Set logger
-        logger = CSVLogger(save_dir=run_dir, name="csv_logs")
+        # Set loggers
+        csv_logger = CSVLogger(save_dir=run_dir, name="csv_logs")
         log_dir = Path(run_dir) / "csv_logs/version_0"
+        loggers = [csv_logger]
+
+        if wandb_cfg.get("enabled", False):
+            wandb_logger = WandbLogger(
+                project=wandb_cfg.get("project", "EphysGPT"),
+                name=wandb_cfg.get("name", None),
+                save_dir=run_dir,
+            )
+            watch_log = wandb_cfg.get("watch_log", None)
+            if watch_log:
+                wandb_logger.watch(
+                    pl_module,
+                    log=watch_log,
+                    log_freq=int(wandb_cfg.get("watch_log_freq", 100)),
+                )
+            loggers.append(wandb_logger)
 
         # Set callbacks
         checkpoint_callback = callbacks.CheckpointCallback(
@@ -113,7 +130,7 @@ def main(cfg: DictConfig):
         # Set trainer
         trainer_kwargs = dict(
             max_epochs=int(n_epochs),
-            logger=logger,
+            logger=loggers,
             callbacks=[checkpoint_callback],
             deterministic=deterministic,
             precision=int(precision),
