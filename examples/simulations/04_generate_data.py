@@ -6,6 +6,7 @@ import hydra
 import logging
 import numpy as np
 import pytorch_lightning as pl
+import torch
 from omegaconf import DictConfig, OmegaConf
 from pathlib import Path
 
@@ -45,6 +46,10 @@ def main(cfg: DictConfig):
     # Set seed (for reproducibility)
     pl.seed_everything(seed, workers=True)
 
+    # Determine device
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    _logger.info(f"Using device: {device}")
+
     # ---------- Model Training ---------- #
 
     if checkpoint is None:
@@ -55,10 +60,12 @@ def main(cfg: DictConfig):
         # Load model
         _logger.info("Loading EphysGPT model ...")
         pl_module = EphysGPTModule.load_model(run_dir, checkpoint=checkpoint)
+        pl_module.to(device)
 
         # Load tokenizer
         _logger.info("Loading tokenizer model ...")
         tkn_module = EphysTokenizerModule.load_model("models/tokenizer", checkpoint="latest")
+        tkn_module.to(device)
 
     # ---------- Data Generation ---------- #
 
