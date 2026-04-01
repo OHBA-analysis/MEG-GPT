@@ -44,6 +44,8 @@ def main(cfg: DictConfig):
 
     if data_dir is None:
         data_dir = Path("./data_burst")
+    else:
+        data_dir = Path(data_dir)
     data_dir = data_dir / "tokenized_data"
 
     # Validate number of tokens

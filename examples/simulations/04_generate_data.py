@@ -37,6 +37,8 @@ def main(cfg: DictConfig):
 
     if data_dir is None:
         data_dir = Path("./data_burst")
+    else:
+        data_dir = Path(data_dir)
     data_dir = data_dir / "generated_data"
     data_dir.mkdir(exist_ok=True)
 

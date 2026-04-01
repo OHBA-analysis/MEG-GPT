@@ -47,6 +47,8 @@ def main(cfg: DictConfig):
 
     if data_dir is None:
         data_dir = Path("./data_burst")
+    else:
+        data_dir = Path(data_dir)
 
     # Load tokenizer model config
     model_config = get_config(cfg.model_config)  # Config object
@@ -82,6 +84,8 @@ def main(cfg: DictConfig):
                 data = standardize(data)
 
                 np.save(save_dir / f"x_{n:0{len(str(len(data_files)))}}.npy", data)
+    else:
+        save_dir = data_dir
 
     # NOTE: For bursting simulation data, we apply bandpass filtering. This is not necessary,
     #       but makes the training more stable.
