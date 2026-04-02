@@ -2,10 +2,10 @@
 main:
   run_dir: ./models/generator  # directory to save checkpoints and logs
   gpus: 1                      # number of GPUs to use (0 = CPU)
-  precision: 32                # precision level (16 or 32)
+  precision: 32                # precision level ("bf16-mixed", "16-mixed", 16, or 32)
   deterministic: True          # enable deterministic training
   seed: 813                    # random seed
-  checkpoint: null             # path to a pre-trained model checkpoint (EDITED)
+  checkpoint: null             # path to a pre-trained model checkpoint
   wandb:
     enabled: False             # set to False to disable WandbLogger
     project: egpt_sim          # W&B project name
