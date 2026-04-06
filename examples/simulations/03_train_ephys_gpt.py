@@ -135,7 +135,7 @@ def main(cfg: DictConfig):
             logger=loggers,
             callbacks=[checkpoint_callback],
             deterministic=deterministic,
-            precision=int(precision),
+            precision=precision,
         )
         if gpus and gpus > 0:
             trainer_kwargs["accelerator"] = "gpu"
