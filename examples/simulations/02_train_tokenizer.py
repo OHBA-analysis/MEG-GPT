@@ -9,6 +9,7 @@ from pathlib import Path
 from tqdm.auto import tqdm
 
 import pytorch_lightning as pl
+from pytorch_lightning.callbacks import ModelSummary, TQDMProgressBar
 from pytorch_lightning.loggers import CSVLogger
 
 from ephys_tokenizer.configs import get_config
@@ -130,7 +131,12 @@ def main(cfg: DictConfig):
             n_epochs=model_cfg.callback.temperature_annealing["n_annealing_epochs"],
             multi_gpu=multi_gpu,
         )
-        cbs = [checkpoint_callback, temperature_callback]
+        cbs = [
+            checkpoint_callback,
+            temperature_callback,
+            ModelSummary(),
+            TQDMProgressBar()
+        ]
 
         # Set trainer
         trainer_kwargs = dict(
