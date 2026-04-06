@@ -159,7 +159,7 @@ class SimulationDataSubloader(Dataset):
         self.times = output[1]
         self.n_windows = self.data.shape[0] // self.window_len
 
-        # Capture subject lables if they were returned
+        # Capture subject labels if they were returned
         if len(output) == 3:
             self.subject_labels = output[2]
         else:
