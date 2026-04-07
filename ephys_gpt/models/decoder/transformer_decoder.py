@@ -11,6 +11,7 @@ Mathematical Notation:
 
 # Import packages
 import logging
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
@@ -301,6 +302,65 @@ class TransformerDecoder(nn.Module):
                 n_groups=n_groups,
             )
             self.layers.append(layer)
+
+    def plot_attention_masks(self, save_path: Optional[str] = None) -> None:
+        """
+        Plots the attention mask for every GASPAttention instance in the decoder.
+
+        Produces a grid of subplots: rows correspond to decoder layers, and columns
+        correspond to attention types (time, channel, cross). Axes are turned off
+        for attention types that are not present in a given layer.
+
+        White pixels indicate positions a query CAN attend to; black pixels indicate
+        masked (ignored) positions.
+
+        Parameters
+        ----------
+        save_path : Optional[str]
+            File path to save the figure. If None, the figure is shown interactively.
+        """
+        attn_types = ["Time", "Channel", "Cross"]
+        attn_attrs = ["gasp_time_attention", "gasp_chan_attention", "gasp_cross_attention"]
+
+        fig, axes = plt.subplots(
+            len(self.layers), 3,
+            figsize=(12, 4 * len(self.layers)),
+            squeeze=False,
+        )
+
+        for layer_idx, layer in enumerate(self.layers):
+            for col_idx, (label, attr) in enumerate(zip(attn_types, attn_attrs)):
+                ax = axes[layer_idx][col_idx]
+                mhga: Optional[MultiHeadGASPAttention] = getattr(layer, attr, None)
+
+                if mhga is None:
+                    ax.set_visible(False)
+                    continue
+
+                mask = (~mhga.gasp_layer.attention_mask).cpu().numpy().T
+                # invert such that True->attend (white), False->masked (black)
+                # transpose so rows=keys, cols=queries
+                
+                ax.imshow(mask, cmap="gray", vmin=0, vmax=1, aspect="auto")
+                ax.set(
+                    xlabel="Query Position",
+                    ylabel="Key Position",
+                    title=f"Layer {layer_idx} \u2014 {label} Attention",
+                )
+                ax.set_xticks(np.arange(-.5, mask.shape[1], 1), minor=True)
+                ax.set_yticks(np.arange(-.5, mask.shape[0], 1), minor=True)
+                ax.grid(which="minor", color="tab:grey", linestyle="-", linewidth=1)
+                ax.tick_params(which="minor", bottom=False, left=False)
+                ax.xaxis.set_major_locator(plt.MaxNLocator(integer=True))
+                ax.yaxis.set_major_locator(plt.MaxNLocator(integer=True))
+
+        fig.tight_layout()
+        if save_path is not None:
+            fig.savefig(save_path, bbox_inches="tight", dpi=300)
+            _logger.info(f"Attention mask figure saved to: {save_path}")
+        else:
+            plt.show()
+        plt.close(fig)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """

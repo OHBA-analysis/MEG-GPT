@@ -171,6 +171,18 @@ class EphysGPT(nn.Module):
 
         return embeddings
 
+    def plot_attention_masks(self, save_path: Optional[str] = None) -> None:
+        """
+        Plots the attention mask for every GASPAttention instance in the decoder.
+        See TransformerDecoder.plot_attention_masks() for details.
+
+        Parameters
+        ----------
+        save_path : Optional[str]
+            File path to save the figure. If None, the figure is shown interactively.
+        """
+        self.transformer_decoder.plot_attention_masks(save_path=save_path)
+
 
 class EphysGPTModule(pl.LightningModule):
     """
