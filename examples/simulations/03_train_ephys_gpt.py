@@ -8,6 +8,7 @@ from omegaconf import DictConfig, OmegaConf
 from pathlib import Path
 
 import pytorch_lightning as pl
+from pytorch_lightning.callbacks import ModelSummary, TQDMProgressBar
 from pytorch_lightning.loggers import CSVLogger, WandbLogger
 
 from ephys_gpt.configs import get_config
@@ -54,6 +55,7 @@ def main(cfg: DictConfig):
         vocab = pickle.load(f)
     if len(vocab["total_token_counts"]) != n_tokens or n_tokens is None:
         n_tokens = len(vocab["total_token_counts"]) + 1
+    _logger.info(f"Using {n_tokens} tokens.")
 
     # Set model training config
     batch_size = cfg.model_config.training.batch_size
@@ -128,12 +130,17 @@ def main(cfg: DictConfig):
         checkpoint_callback = callbacks.CheckpointCallback(
             save_freq=1, checkpoint_dir=f"{run_dir}/checkpoints"
         )
+        cbs = [
+            checkpoint_callback,
+            ModelSummary(max_depth=2),
+            TQDMProgressBar(),
+        ]
 
         # Set trainer
         trainer_kwargs = dict(
             max_epochs=int(n_epochs),
             logger=loggers,
-            callbacks=[checkpoint_callback],
+            callbacks=cbs,
             deterministic=deterministic,
             precision=precision,
         )
