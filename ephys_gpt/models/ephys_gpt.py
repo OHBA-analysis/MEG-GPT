@@ -316,13 +316,14 @@ class EphysGPTModule(pl.LightningModule):
         self,
         trainer: pl.Trainer,
         datamodule: pl.LightningDataModule,
+        ckpt_path: Optional[str] = None,
         **kwargs,
     ):
         """
         Fits the model using the specified trainer and datamodule.
         """
         # Run training
-        trainer.fit(self, datamodule=datamodule, weights_only=False, **kwargs)
+        trainer.fit(self, datamodule=datamodule, ckpt_path=ckpt_path, **kwargs)
 
     # ----------------
     # Saving & Loading
@@ -354,6 +355,7 @@ class EphysGPTModule(pl.LightningModule):
     ):
         """
         Loads the model from the specified directory.
+        (Note that this function is mainly for the inference.)
 
         Parameters
         ----------
@@ -408,7 +410,7 @@ class EphysGPTModule(pl.LightningModule):
             ckpt = torch.load(ckpt_path, map_location=map_location, weights_only=False)
             # NOTE: Includes model weights, optimizer / scheduler / AMP states, and metadata.
 
-            # Load model weights
+            # Load model weights (inference-friendly)
             state_dict = ckpt["state_dict"]
             model_module.load_state_dict(state_dict, strict=strict)
 
