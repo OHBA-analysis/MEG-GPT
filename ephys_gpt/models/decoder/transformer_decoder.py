@@ -384,8 +384,13 @@ class TransformerDecoder(nn.Module):
         # Employ stochastic depth for channel attention (per batch)
         chan_weight = 1.0
         if self.training and self.full_channel_attention_dropout > 0.0:
-            # If a random float is less than the dropout threshold, drop the channel branch
-            if torch.rand(1).item() < self.full_channel_attention_dropout:
+            rand_val = torch.rand(1, device=x.device)
+            if torch.distributed.is_available() and torch.distributed.is_initialized():
+                torch.distributed.broadcast(rand_val, src=0)
+                # NOTE: The random value is broadcasted from rank 0 so that all GPUs
+                #       make the same drop decision (needed for DDP; harmless on a
+                #       single GPU).
+            if rand_val.item() < self.full_channel_attention_dropout:
                 chan_weight = 0.0
             else:
                 # Scale up by 1 / (1 - p) to maintain expected value
