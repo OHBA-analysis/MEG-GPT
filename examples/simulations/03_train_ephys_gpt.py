@@ -4,7 +4,7 @@
 import hydra
 import logging
 import pickle
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import DictConfig, OmegaConf, open_dict
 from pathlib import Path
 
 import pytorch_lightning as pl
@@ -39,6 +39,8 @@ def main(cfg: DictConfig):
     checkpoint = cfg.main.checkpoint
     wandb_cfg = cfg.main.get("wandb", {})
 
+    use_gpu = (gpus is not None and gpus > 0)
+
     # Set data config
     data_dir = cfg.data_config.data_dir
     Fs = cfg.data_config.sampling_frequency
@@ -53,8 +55,10 @@ def main(cfg: DictConfig):
     n_tokens = cfg.model_config.input_embedding.n_tokens
     with open("models/tokenizer/vocab.pkl", "rb") as f:
         vocab = pickle.load(f)
-    if len(vocab["total_token_counts"]) != n_tokens or n_tokens is None:
+    if n_tokens is None or len(vocab["total_token_counts"]) != n_tokens:
         n_tokens = len(vocab["total_token_counts"]) + 1
+        with open_dict(cfg):
+            cfg.model_config.input_embedding.n_tokens = n_tokens
     _logger.info(f"Using {n_tokens} tokens.")
 
     # Set model training config
@@ -62,6 +66,10 @@ def main(cfg: DictConfig):
     val_split = cfg.model_config.training.val_split
     n_epochs = cfg.model_config.training.n_epochs
     multi_gpu = cfg.model_config.training.multi_gpu
+
+    if gpus > 1 and not multi_gpu:
+        _logger.warning("Multi-GPU training is not enabled in the model config. Enabling now ...")
+        multi_gpu = True
 
     # Load EphysGPT model config
     model_config = get_config(cfg.model_config)  # Config object
@@ -93,7 +101,7 @@ def main(cfg: DictConfig):
         is_distributed=multi_gpu,
         seed=seed,
         num_workers=6,
-        pin_memory=True,
+        pin_memory=use_gpu,
         persistent_workers=True,
         drop_last=True,
     )
@@ -108,7 +116,6 @@ def main(cfg: DictConfig):
 
         # Set loggers
         csv_logger = CSVLogger(save_dir=run_dir, name="csv_logs")
-        log_dir = Path(run_dir) / "csv_logs/version_0"
         loggers = [csv_logger]
 
         if wandb_cfg.get("enabled", False):
@@ -144,17 +151,31 @@ def main(cfg: DictConfig):
             deterministic=deterministic,
             precision=precision,
         )
-        if gpus and gpus > 0:
+        if use_gpu:
             trainer_kwargs["accelerator"] = "gpu"
             trainer_kwargs["devices"] = gpus
 
         trainer = pl.Trainer(**trainer_kwargs)
 
+        # Validate attention masks
+        if trainer.is_global_zero:
+            pl_module.model.plot_attention_masks(
+                save_path=Path(run_dir) / "figures" / "attention_masks.png"
+            )
+
         # Run training via the module wrapper
         pl_module.fit(trainer=trainer, datamodule=sim_datamodule)
-        pl_module.save(run_dir)  # save model weights and token vocab
-        get_history(log_dir, save_dir=run_dir)  # save training history
-        _logger.info(f"Training finished. Model saved to: {run_dir}")
+
+        # Save trained model
+        if trainer.is_global_zero:
+            # Save model weights and token vocab
+            pl_module.save(run_dir)
+
+            # Save training history
+            log_dir = Path(csv_logger.log_dir)
+            get_history(log_dir, save_dir=run_dir)
+
+            _logger.info(f"Training finished. Model saved to: {run_dir}")
 
     _logger.info("Training complete.")
 

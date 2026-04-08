@@ -42,6 +42,8 @@ def main(cfg: DictConfig):
     seed = cfg.main.seed
     checkpoint = cfg.main.checkpoint
 
+    use_gpu = (gpus is not None and gpus > 0)
+
     # Set data config
     data_dir = cfg.data_config.data_dir
     Fs = cfg.data_config.sampling_frequency
@@ -59,6 +61,10 @@ def main(cfg: DictConfig):
     batch_size = model_cfg.training.batch_size
     n_epochs = model_cfg.training.n_epochs
     multi_gpu = model_cfg.training.multi_gpu
+
+    if gpus > 1 and not multi_gpu:
+        _logger.warning("Multi-GPU training is not enabled in the model config. Enabling now ...")
+        multi_gpu = True
 
     # Get directories
     Path(run_dir).mkdir(parents=True, exist_ok=True)
@@ -107,12 +113,14 @@ def main(cfg: DictConfig):
         is_distributed=multi_gpu,
         seed=seed,
         num_workers=6,
-        pin_memory=True,
+        pin_memory=use_gpu,
         persistent_workers=True,
         drop_last=True,
     )
 
     # ---------- Model Training ---------- #
+
+    trainer = None
 
     if checkpoint is None:
         # Build network via Lightning module
@@ -120,7 +128,6 @@ def main(cfg: DictConfig):
 
         # Set logger
         logger = CSVLogger(save_dir=run_dir, name="csv_logs")
-        log_dir = Path(run_dir) / "csv_logs/version_0"
 
         # Set callbacks
         checkpoint_callback = callbacks.CheckpointCallback(
@@ -146,7 +153,7 @@ def main(cfg: DictConfig):
             deterministic=deterministic,
             precision=int(precision),
         )
-        if gpus and gpus > 0:
+        if use_gpu:
             trainer_kwargs["accelerator"] = "gpu"
             trainer_kwargs["devices"] = gpus
 
@@ -154,9 +161,17 @@ def main(cfg: DictConfig):
 
         # Run training via the module wrapper (refactors vocab after training)
         pl_module.fit(trainer=trainer, datamodule=sim_datamodule)
-        pl_module.save(run_dir)  # save model weights and token vocab
-        get_history(log_dir, save_dir=run_dir)  # save training history
-        _logger.info(f"Training finished. Model saved to: {run_dir}")
+
+        # Save trained model
+        if trainer.is_global_zero:
+            # Save model weights and token vocab
+            pl_module.save(run_dir)
+
+            # Save training history
+            log_dir = Path(logger.log_dir)
+            get_history(log_dir, save_dir=run_dir)
+            
+            _logger.info(f"Training finished. Model saved to: {run_dir}")
 
     else:
         # Load model
@@ -167,57 +182,59 @@ def main(cfg: DictConfig):
 
     # ---------- Data Saving ---------- #
 
-    # Tokenize data used for training the model
-    tokens, token_weights = pl_module.tokenize_data(
-        sim_datamodule.full_dataloader(),
-        batch_size=16,
-        remap=True,
-        return_weights=True,
-        num_workers=6,
-    )
+    if trainer is None or trainer.is_global_zero:
+        # Tokenize data used for training the model
+        tokens, token_weights = pl_module.tokenize_data(
+            sim_datamodule.full_dataloader(),
+            batch_size=16,
+            remap=True,
+            return_weights=True,
+            num_workers=6,
+        )
 
-    # Reconstruct data from tokens
-    reconstructed_data = pl_module.reconstruct_data(tokens)
+        # Reconstruct data from tokens
+        reconstructed_data = pl_module.reconstruct_data(tokens)
 
-    # Save tokenized and reconstructed data
-    tkn_data_dir = data_dir / "tokenized_data"
-    tkn_data_dir.mkdir(exist_ok=True)
+        # Save tokenized and reconstructed data
+        tkn_data_dir = data_dir / "tokenized_data"
+        tkn_data_dir.mkdir(exist_ok=True)
 
-    recon_data_dir = data_dir / "reconstructed_data"
-    recon_data_dir.mkdir(exist_ok=True)
+        recon_data_dir = data_dir / "reconstructed_data"
+        recon_data_dir.mkdir(exist_ok=True)
 
-    for n, file in enumerate(tqdm(data_files, desc="Saving tokenized data")):
-        subject_id = file.stem.split("_")[1]
-        np.save(tkn_data_dir / f"token_{subject_id}.npy", tokens[n])
-        np.save(recon_data_dir / f"recon_{subject_id}.npy", reconstructed_data[n])
+        for n, file in enumerate(tqdm(data_files, desc="Saving tokenized data")):
+            subject_id = file.stem.split("_")[1]
+            np.save(tkn_data_dir / f"token_{subject_id}.npy", tokens[n])
+            np.save(recon_data_dir / f"recon_{subject_id}.npy", reconstructed_data[n])
 
     # ---------- Visualization ---------- #
 
-    # Compute PVE
-    pve = pl_module.get_pve(dataloader=sim_datamodule.full_dataloader())
-    print(f"Percentage of Variance Explained (PVE) - Average: {pve.mean()}")
-    plotting.plot_pve(pve, plot_dir=f"{run_dir}/figures")
+    if trainer is None or trainer.is_global_zero:
+        # Compute PVE
+        pve = pl_module.get_pve(dataloader=sim_datamodule.full_dataloader())
+        print(f"Percentage of Variance Explained (PVE) - Average: {pve.mean()}")
+        plotting.plot_pve(pve, plot_dir=f"{run_dir}/figures")
 
-    # Plot token kernel response
-    token_response, input = pl_module.get_token_kernel_response(
-        dataloader=sim_datamodule.full_dataloader(),
-        input="impulse",
-    )
-    plotting.plot_token_response(token_response, input, plot_dir=f"{run_dir}/figures")
+        # Plot token kernel response
+        token_response, input = pl_module.get_token_kernel_response(
+            dataloader=sim_datamodule.full_dataloader(),
+            input="impulse",
+        )
+        plotting.plot_token_response(token_response, input, plot_dir=f"{run_dir}/figures")
 
-    # Plot token counts histogram
-    plotting.plot_token_counts(
-        vocab=f"{run_dir}/vocab.pkl", plot_dir=f"{run_dir}/figures"
-    )
+        # Plot token counts histogram
+        plotting.plot_token_counts(
+            vocab=f"{run_dir}/vocab.pkl", plot_dir=f"{run_dir}/figures"
+        )
 
-    # Plot signals reconstructed from tokenized data (for one session)
-    plotting.plot_fitted_signal(
-        original_data_path=data_files[0],
-        reconstructed_data=reconstructed_data,
-        token_weights=token_weights,
-        subject_idx=0,
-        plot_dir=f"{run_dir}/figures",
-    )
+        # Plot signals reconstructed from tokenized data (for one session)
+        plotting.plot_fitted_signal(
+            original_data_path=data_files[0],
+            reconstructed_data=reconstructed_data,
+            token_weights=token_weights,
+            subject_idx=0,
+            plot_dir=f"{run_dir}/figures",
+        )
 
     _logger.info("Training complete.")
 
