@@ -19,7 +19,11 @@ from einops import rearrange
 from typing import List, Optional
 
 from ephys_gpt.models.decoder.attention import MultiHeadGASPAttention
-from ephys_gpt.models.utils import NormalizationLayer, FeedForwardLayer
+from ephys_gpt.models.utils import (
+    ChannelDropoutLayer,
+    FeedForwardLayer,
+    NormalizationLayer,
+)
 
 
 _logger = logging.getLogger(__name__)
@@ -46,6 +50,8 @@ class DecoderLayer(nn.Module):
         do_cross_attention: bool,
         chan_attention_mask: np.ndarray,
         chan_attn_chandim: int,
+        channel_attention_channel_dropout: float,
+        time_attention_channel_dropout: float,
         feed_forward_dim: int,
         feed_forward_activation: str,
         dropout: float,
@@ -63,6 +69,9 @@ class DecoderLayer(nn.Module):
         # Channel Attention Branch
         # ------------------------
         if do_chan_attention:
+            self.chan_channel_dropout = ChannelDropoutLayer(
+                channel_attention_channel_dropout, channel_dim=1
+            )
             self.chan_attention_dropout = nn.Dropout(dropout)
             self.norm_chan1 = NormalizationLayer(norm_type, model_dim, n_groups)
 
@@ -96,6 +105,9 @@ class DecoderLayer(nn.Module):
         # ---------------------
         # Time Attention Branch
         # ---------------------
+        self.time_channel_dropout = ChannelDropoutLayer(
+            time_attention_channel_dropout, channel_dim=2
+        )
         self.time_attention_dropout = nn.Dropout(dropout)
         self.norm_time1 = NormalizationLayer(norm_type, model_dim, n_groups)
 
@@ -174,7 +186,8 @@ class DecoderLayer(nn.Module):
 
             # Channel attention (query=xt, key=xt_dim, value=xt_dim)
             xt = self.gasp_chan_attention(xt, xt_dim, xt_dim)
-            xt = self.chan_attention_dropout(xt)
+            xt = self.chan_channel_dropout(xt)   # channel-level dropout; zero out entire channel slices
+            xt = self.chan_attention_dropout(xt) # element-wise dropout
             # shape: (B, C, L, D)
 
             # Add residual (weighted for stochastic depth; see TransformerDecoder class)
@@ -196,7 +209,8 @@ class DecoderLayer(nn.Module):
         x_time = self.norm_time1(x)
 
         x_time = self.gasp_time_attention(x_time, x_time, x_time)
-        x_time = self.time_attention_dropout(x_time)
+        x_time = self.time_channel_dropout(x_time)   # channel-level dropout; zero out entire channel slices
+        x_time = self.time_attention_dropout(x_time) # element-wise dropout
 
         out_len = x_time.size(1)
         x_time = x_time + x_residual[:, -out_len:, :, :]
@@ -245,6 +259,8 @@ class TransformerDecoder(nn.Module):
         chan_attention_mask: List[Optional[np.ndarray]],
         chan_attn_chandim: Optional[int],
         full_channel_attention_dropout: float,
+        channel_attention_channel_dropout: float,
+        time_attention_channel_dropout: float,
         feed_forward_dim: int,
         feed_forward_activation: str,
         dropout: float,
@@ -295,6 +311,8 @@ class TransformerDecoder(nn.Module):
                 do_cross_attention=do_cross_attention[n],
                 chan_attention_mask=chan_attention_mask[n],
                 chan_attn_chandim=chan_attn_chandim,
+                channel_attention_channel_dropout=channel_attention_channel_dropout,
+                time_attention_channel_dropout=time_attention_channel_dropout,
                 feed_forward_dim=feed_forward_dim,
                 feed_forward_activation=feed_forward_activation,
                 dropout=dropout,

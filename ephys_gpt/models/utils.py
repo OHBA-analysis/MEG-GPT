@@ -149,3 +149,45 @@ class FeedForwardLayer(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.net(x)
+
+
+class ChannelDropoutLayer(nn.Module):
+    """
+    Drops entire channel entries from a tensor during training (per-sample).
+
+    Unlike element-wise nn.Dropout, this module zeroes all features for
+    randomly selected channels. Each sample in the batch receives an
+    independent binary mask. Inverted dropout scaling (1 / (1 - p)) is
+    applied so that the expected magnitude is preserved at the evaluation time.
+
+    Parameters
+    ----------
+    p : float
+        Probability of dropping a channel.
+    channel_dim : int
+        Dimension index of the channel axis in the input tensor.
+    """
+    def __init__(self, p: float, channel_dim: int) -> None:
+        super().__init__()
+        if not 0.0 <= p < 1.0:
+            raise ValueError(f"Dropout probability p must be in [0, 1), got {p}.")
+        self.p = p
+        self.channel_dim = channel_dim
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if not self.training or self.p == 0.0:
+            return x
+
+        keep_prob = 1.0 - self.p
+
+        # Build a mask that broadcasts over all dims except batch and channel dim
+        mask_shape = [1] * x.ndim
+        mask_shape[0] = x.size(0)
+        mask_shape[self.channel_dim] = x.size(self.channel_dim)
+        mask = torch.bernoulli(
+            torch.full(mask_shape, keep_prob, device=x.device, dtype=x.dtype)
+        )
+        return x * mask / keep_prob  # apply inverted dropout scaling
+
+    def extra_repr(self) -> str:
+        return f"p={self.p}, channel_dim={self.channel_dim}"

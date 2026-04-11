@@ -35,6 +35,8 @@ class TransformerDecoderConfig:
     chan_attention_mask: Optional[List[Optional[str]]] = None
 
     full_channel_attention_dropout: Optional[float] = None
+    channel_attention_channel_dropout: float = 0.0
+    time_attention_channel_dropout: float = 0.0
     chan_attn_chandim: Optional[int] = None
     feed_forward_dim: Optional[int] = None
     feed_forward_activation: str = "relu"
@@ -175,6 +177,10 @@ class EphysGPTConfig:
         assert cfg.feed_forward_dim is not None, "feed_forward_dim must be set"
         assert cfg.feed_forward_dim > 0, "feed_forward_dim must be greater than 0"
         assert 0.0 <= cfg.dropout < 1.0, "dropout must be in [0, 1)."
+        assert 0.0 <= cfg.channel_attention_channel_dropout < 1.0, \
+            "channel_attention_channel_dropout must be in [0, 1)."
+        assert 0.0 <= cfg.time_attention_channel_dropout < 1.0, \
+            "time_attention_channel_dropout must be in [0, 1)."
         ACTIVATION_TYPES = ["relu", "gelu", "swish", "silu"]
         assert cfg.feed_forward_activation in ACTIVATION_TYPES, f"activation_type must be one of {ACTIVATION_TYPES}"
         NORM_TYPES = ["layer", "batch", "group"]

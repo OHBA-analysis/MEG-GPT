@@ -83,6 +83,8 @@ class EphysGPT(nn.Module):
             decoder_cfg.chan_attention_mask,
             decoder_cfg.chan_attn_chandim,
             decoder_cfg.full_channel_attention_dropout,
+            decoder_cfg.channel_attention_channel_dropout,
+            decoder_cfg.time_attention_channel_dropout,
             decoder_cfg.feed_forward_dim,
             decoder_cfg.feed_forward_activation,
             decoder_cfg.dropout,
