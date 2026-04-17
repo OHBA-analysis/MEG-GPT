@@ -59,6 +59,8 @@ class TrainingConfig:
         "eps": 1e-7,
     })
     lr_scheduler: Optional[Dict[str, Any]] = None
+    gradient_clip_val: Optional[float] = None
+    gradient_clip_algorithm: str = "norm"
     batch_size: int = 32
     n_epochs: int = 10
     val_split: float = 0.1
@@ -244,6 +246,10 @@ class EphysGPTConfig:
     def _validate_training_config(self) -> None:
         cfg = self.training
         assert cfg.optimizer is not None, "optimizer must be set"
+        if cfg.gradient_clip_val is not None:
+            assert cfg.gradient_clip_val > 0, "gradient_clip_val must be positive"
+        assert cfg.gradient_clip_algorithm in ("norm", "value"), \
+            "gradient_clip_algorithm must be 'norm' or 'value'"
         assert cfg.batch_size > 0, "batch_size must be greater than 0"
         assert cfg.n_epochs > 0, "n_epochs must be greater than 0"
         assert 0 < cfg.val_split < 1, "val_split must be between 0 and 1"
