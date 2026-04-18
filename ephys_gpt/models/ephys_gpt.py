@@ -21,6 +21,7 @@ from omegaconf import OmegaConf
 from typing import Dict, List, Optional
 from ephys_gpt.configs import Config, get_config
 from ephys_gpt.models import InputEmbeddingLayer, TransformerDecoder
+from ephys_gpt.models.embeddings import LearnedPositionEmbedding
 from ephys_gpt.models.utils import ShiftTokenLayer
 from ephys_gpt.optim.losses import CrossEntropyLoss
 from ephys_gpt.optim.optimizer import resolve_optimizer, resolve_lr_scheduler
@@ -29,6 +30,35 @@ from ephys_gpt.optim.initializer import init_model_weights
 
 logging.basicConfig(level=logging.INFO)
 _logger = logging.getLogger(__name__)
+
+
+_NO_DECAY_TYPES = (
+    nn.Embedding,
+    nn.LayerNorm,
+    nn.GroupNorm,
+    nn.BatchNorm1d,
+    LearnedPositionEmbedding,
+)
+
+
+def _get_param_groups(model: nn.Module, weight_decay: float) -> List[Dict]:
+    """
+    Splits model parameters into two groups: those that receive weight decay
+    and those that do not (embeddings, normalization layers, biases).
+    """
+    decay, no_decay = set(), set()
+    for module_name, module in model.named_modules():
+        for param_name, _ in module.named_parameters(recurse=False):
+            full_name = f"{module_name}.{param_name}" if module_name else param_name
+            if isinstance(module, _NO_DECAY_TYPES) or "bias" in param_name:
+                no_decay.add(full_name)
+            else:
+                decay.add(full_name)
+    param_dict = {n: p for n, p in model.named_parameters()}
+    return [
+        {"params": [param_dict[n] for n in sorted(decay)],    "weight_decay": weight_decay},
+        {"params": [param_dict[n] for n in sorted(no_decay)], "weight_decay": 0.0},
+    ]
 
 
 class EphysGPT(nn.Module):
@@ -301,15 +331,22 @@ class EphysGPTModule(pl.LightningModule):
 
         # Get optimizer
         optim_description = self.config.training.optimizer
-        optimizer = resolve_optimizer(self.parameters(), optim_description)
+        weight_decay = optim_description.get("weight_decay", 0.01)
+        optimizer_name = optim_description.get("name", "adam").lower()
+        if optimizer_name == "adamw" and weight_decay > 0:
+            params = _get_param_groups(self, weight_decay)
+        else:
+            params = self.parameters()
+        optimizer = resolve_optimizer(params, optim_description)
 
         # Get learning rate scheduler
         sched_description = getattr(self.config.training, "lr_scheduler", None)
         if sched_description:
             scheduler = resolve_lr_scheduler(optimizer, sched_description)
+            interval = sched_description.get("interval", "epoch")
             return {
                 "optimizer": optimizer,
-                "lr_scheduler": {"scheduler": scheduler, "interval": "epoch", "frequency": 1},
+                "lr_scheduler": {"scheduler": scheduler, "interval": interval, "frequency": 1},
             }
 
         return optimizer
