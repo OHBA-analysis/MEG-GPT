@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from einops import rearrange
 from torch.utils.data import DataLoader, Subset
 from tqdm.auto import tqdm
-from typing import TYPE_CHECKING, Dict, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 
 if TYPE_CHECKING:
     from ephys_gpt.models.ephys_gpt import EphysGPTModule
@@ -82,6 +82,7 @@ def extract_channel_attention_matrix(
     dataloader: DataLoader,
     sample_size: Optional[Union[float, int]] = None,
     device: str = "cpu",
+    aggregate: bool = False,
 ) -> Dict[int, torch.Tensor]:
     """
     Extracts channel attention matrices from a trained EphysGPT model.
@@ -123,6 +124,11 @@ def extract_channel_attention_matrix(
         state; call `torch.manual_seed` beforehand for reproducibility.
     device : str
         Device on which to run the forward pass (e.g. "cpu" or "cuda").
+    aggregate : bool
+        If True, accumulate an online mean over samples and sequence length
+        instead of storing all tensors. Returns tensors of shape (H, C_q, C_k)
+        rather than (N, H, L, C_q, C_k). Use this when the full validation set
+        is too large to hold in memory.
 
     Returns
     -------
@@ -130,7 +136,8 @@ def extract_channel_attention_matrix(
         Mapping from decoder layer index to a channel attention matrix.
         Only layers with `do_chan_attention=True` are included.
 
-        Each tensor has shape (N, H, L, C_q, C_k) where:
+        When `aggregate=False` (default), each tensor has shape
+        (N, H, L, C_q, C_k) where:
 
         - N  : total number of samples across all batches
         - H  : number of attention heads
@@ -139,6 +146,10 @@ def extract_channel_attention_matrix(
         - C_q: number of query channels (always n_channels)
         - C_k: number of key channels (equals `chan_attn_chandim` when that
                config option is set, otherwise equals C_q)
+
+        When `aggregate=True`, each tensor has shape (H, C_q, C_k),
+        representing the mean attention matrix averaged over all samples and
+        the sequence length dimension.
 
         The matrix elements are non-negative and sum to 1 along the C_k axis
         (i.e. each query channel's attention over all key channels is a
@@ -209,8 +220,12 @@ def extract_channel_attention_matrix(
     # Extra label keys to pull from each batch dict, mirroring training_step
     extra_label_specs = pl_module.config.input_embedding.extra_label_specs
 
-    # Per-layer storage: one tensor per batch, concatenated at the end
-    captured: Dict[int, list] = {i: [] for i in chan_attn_modules}
+    # Per-layer storage: running (sum, count) when aggregate=True, else list of tensors
+    captured: Dict[int, Any] = (
+        {i: (None, 0) for i in chan_attn_modules}
+        if aggregate
+        else {i: [] for i in chan_attn_modules}
+    )
 
     def _make_hook(layer_idx: int):
         """
@@ -249,7 +264,17 @@ def extract_channel_attention_matrix(
             # Replace NaNs that arise from fully-masked rows
             attn = torch.nan_to_num(attn, nan=0.0)
 
-            captured[layer_idx].append(attn.detach().cpu())
+            if aggregate:
+                # Average over sequence length and batch samples
+                attn_mean = attn.detach().cpu().mean(dim=2)
+                running_sum, count = captured[layer_idx]
+                batch_sum = attn_mean.sum(dim=0)  # (H, C_q, C_k)
+                captured[layer_idx] = (
+                    batch_sum if running_sum is None else running_sum + batch_sum,
+                    count + attn_mean.shape[0],
+                )
+            else:
+                captured[layer_idx].append(attn.detach().cpu())
 
         return hook
 
@@ -279,6 +304,9 @@ def extract_channel_attention_matrix(
             handle.remove()
         if was_training:
             pl_module.train()
+
+    if aggregate:
+        return {i: s / n for i, (s, n) in captured.items()}
 
     # Concatenate per-batch results along the sample dimension
     return {i: torch.cat(captured[i], dim=0) for i in captured}
