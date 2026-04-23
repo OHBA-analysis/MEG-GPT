@@ -52,6 +52,7 @@ class EphysGPTGenerator:
         extra_labels: List[torch.Tensor],
         top_p: Optional[float] = None,
         top_k: Optional[int] = None,
+        typical_p: Optional[float] = None,
         temperature: float = 1.0,
     ) -> torch.Tensor:
         """
@@ -67,6 +68,8 @@ class EphysGPTGenerator:
             The cumulative probability threshold for top-p sampling.
         top_k : int, optional
             The number of top logits to sample from.
+        typical_p : float, optional
+            The cumulative probability threshold for typical sampling (Meister et al., 2023).
         temperature : float, optional
             Scaling factor for the logits to control randomness. Must be > 0.
 
@@ -84,7 +87,7 @@ class EphysGPTGenerator:
         # shape: (B, 1, C, N_t)
 
         # Sample the next token
-        token_samples = sample_from_logits(logits, top_p, top_k)  # shape: (B, 1, C)
+        token_samples = sample_from_logits(logits, top_p, top_k, typical_p)  # shape: (B, 1, C)
 
         # Remove time dimension (since we only generated a single time step)
         token_samples = token_samples.squeeze(1)  # shape: (B, C)
@@ -97,6 +100,7 @@ class EphysGPTGenerator:
         n_samples: int,
         top_p: Optional[float] = None,
         top_k: Optional[int] = None,
+        typical_p: Optional[float] = None,
         temperature: float = 1.0,
         batch_size: Optional[int] = None,
         prompt: Optional[Union[np.ndarray, torch.Tensor]] = None,
@@ -113,6 +117,9 @@ class EphysGPTGenerator:
             Top p proportion of values to keep for nucleus sampling.
         top_k : int, optional
             Top k number of values to keep for top-k sampling.
+        typical_p : float, optional
+            Cumulative probability mass of the locally typical set to retain
+            (Meister et al., 2023).
         temperature : float, optional
             Temperature for sampling from the logits. Higher values increase randomness.
         batch_size : int, optional
@@ -227,6 +234,7 @@ class EphysGPTGenerator:
                 extra_labels=formatted_extra_labels,
                 top_p=top_p,
                 top_k=top_k,
+                typical_p=typical_p,
                 temperature=temperature,
             )
 
