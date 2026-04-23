@@ -310,3 +310,75 @@ def extract_channel_attention_matrix(
 
     # Concatenate per-batch results along the sample dimension
     return {i: torch.cat(captured[i], dim=0) for i in captured}
+
+
+def channel_attention_rollout(
+    attention_matrices: Dict[int, torch.Tensor],
+    add_residual: bool = True,
+) -> torch.Tensor:
+    """
+    Computes attention rollout (Abnar & Zuidema, 2020) over channel attention.
+
+    Averages per-layer matrices over heads, optionally mixes in the identity
+    residual (0.5*A + 0.5*I) and re-normalises rows, then sequentially
+    matrix-multiplies across layers to produce a global channel-to-channel
+    influence matrix.
+
+    Parameters
+    ----------
+    attention_matrices : Dict[int, torch.Tensor]
+        Output of `extract_channel_attention_matrix(aggregate=True)`.
+        Each value has shape (H, C_q, C_k).
+    add_residual : bool
+        If True, apply `A_hat = 0.5*A + 0.5*I` and re-normalise rows
+        before multiplying. Requires square matrices (C_q == C_k).
+
+    Returns
+    -------
+    rollout : torch.Tensor
+        Rollout matrix of shape (C, C). Row i is a probability distribution over
+        key channels representing cumulative influence on query channel i across
+        all layers.
+
+    Raises
+    ------
+    ValueError
+        If attention_matrices is empty, or if any layer has C_q != C_k
+        (caused by chan_attn_chandim reducing the key channel dimension).
+
+    References
+    ----------
+    Abnar, S. & Zuidema, W. (2020). Quantifying Attention Flow in
+    Transformers. ACL 2020. https://arxiv.org/abs/2005.00928
+    """
+    if not attention_matrices:
+        raise ValueError(
+            "attention_matrices is empty. "
+            "Ensure extract_channel_attention_matrix returned at least one layer."
+        )
+
+    for (layer_idx, mat) in attention_matrices.items():
+        C_q, C_k = mat.shape[1], mat.shape[2]
+        if C_q != C_k:
+            raise ValueError(
+                f"Layer {layer_idx} has a non-square attention matrix "
+                f"(C_q={C_q}, C_k={C_k}). Rollout requires square matrices. "
+                "This is caused by chan_attn_chandim reducing the key channel "
+                "dimension. Remove chan_attn_chandim or set it equal to n_channels."
+            )
+
+    rollout: Optional[torch.Tensor] = None
+
+    for layer_idx in sorted(attention_matrices.keys()):
+        A = attention_matrices[layer_idx].float().mean(dim=0)
+        # average over heads; shape: (C, C)
+
+        if add_residual:
+            C = A.shape[0]
+            I = torch.eye(C, dtype=A.dtype, device=A.device)
+            A = 0.5 * A + 0.5 * I
+            A = A / A.sum(dim=-1, keepdim=True)
+
+        rollout = A if rollout is None else A @ rollout
+
+    return rollout
