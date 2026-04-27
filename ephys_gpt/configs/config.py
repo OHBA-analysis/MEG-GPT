@@ -61,6 +61,7 @@ class TrainingConfig:
     lr_scheduler: Optional[Dict[str, Any]] = None
     gradient_clip_val: Optional[float] = None
     gradient_clip_algorithm: str = "norm"
+    accumulate_grad_batches: int = 1
     batch_size: int = 32
     n_epochs: int = 10
     val_split: float = 0.1
@@ -250,6 +251,8 @@ class EphysGPTConfig:
             assert cfg.gradient_clip_val > 0, "gradient_clip_val must be positive"
         assert cfg.gradient_clip_algorithm in ("norm", "value"), \
             "gradient_clip_algorithm must be 'norm' or 'value'"
+        assert cfg.accumulate_grad_batches >= 1, \
+            "accumulate_grad_batches must be >= 1"
         assert cfg.batch_size > 0, "batch_size must be greater than 0"
         assert cfg.n_epochs > 0, "n_epochs must be greater than 0"
         assert 0 < cfg.val_split < 1, "val_split must be between 0 and 1"
