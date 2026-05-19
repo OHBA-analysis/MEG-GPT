@@ -19,6 +19,8 @@ def _get_activation_fn(activation: str) -> nn.Module:
 
     if activation == "relu":
         return nn.ReLU()
+    elif activation == "leaky_relu":
+        return nn.LeakyReLU(negative_slope=0.2)
     elif activation == "gelu":
         return nn.GELU()
     elif activation == "swish" or activation == "silu":

@@ -26,15 +26,21 @@ class CrossEntropyLoss(nn.Module):
         which to compute the loss.
     top_k : List[int], optional
         List of top-k values for accuracy calculation.
+    label_smoothing : float, optional
+        Label smoothing factor in [0, 1). 0.0 disables smoothing
+        (standard hard-label cross-entropy); values > 0 redistribute
+        a fraction of probability mass uniformly over the vocabulary.
     """
     def __init__(
         self,
         loss_sequence_length: int,
         top_k: Optional[List[int]] = None,
+        label_smoothing: float = 0.0,
     ):
         super().__init__()
         self.loss_sequence_length = loss_sequence_length
         self.top_k = top_k or [1]
+        self.label_smoothing = label_smoothing
 
     def forward(
         self,
@@ -68,7 +74,12 @@ class CrossEntropyLoss(nn.Module):
 
         # Compute cross-entropy loss
         y_pred_loss_tp = y_pred_loss.permute(0, 3, 1, 2)  # shape: (B, N_t, loss_sequence_length, C)
-        ce_loss = F.cross_entropy(y_pred_loss_tp, y_true_loss, reduction="none")
+        ce_loss = F.cross_entropy(
+            y_pred_loss_tp,
+            y_true_loss,
+            reduction="none",
+            label_smoothing=self.label_smoothing,
+        )
         # shape: (B, loss_sequence_length, C)
 
         loss = ce_loss.mean()  # mean over batch, time, and channels

@@ -49,6 +49,7 @@ class TransformerDecoderConfig:
 class LossConfig:
     loss_sequence_length: Optional[int] = None
     top_k: Optional[List[int]] = None
+    label_smoothing: float = 0.0
 
 
 @dataclass
@@ -184,7 +185,7 @@ class EphysGPTConfig:
             "channel_attention_channel_dropout must be in [0, 1)."
         assert 0.0 <= cfg.time_attention_channel_dropout < 1.0, \
             "time_attention_channel_dropout must be in [0, 1)."
-        ACTIVATION_TYPES = ["relu", "gelu", "swish", "silu"]
+        ACTIVATION_TYPES = ["relu", "leaky_relu", "gelu", "swish", "silu"]
         assert cfg.feed_forward_activation in ACTIVATION_TYPES, f"activation_type must be one of {ACTIVATION_TYPES}"
         NORM_TYPES = ["layer", "batch", "group"]
         assert cfg.norm_type in NORM_TYPES, f"norm_type must be one of {NORM_TYPES}"
@@ -243,6 +244,9 @@ class EphysGPTConfig:
         assert (
             cfg.loss_sequence_length > 0
         ), "loss_sequence_length must be greater than 0"
+        assert (
+            0.0 <= cfg.label_smoothing < 1.0
+        ), "label_smoothing must be in [0, 1)"
 
     def _validate_training_config(self) -> None:
         cfg = self.training

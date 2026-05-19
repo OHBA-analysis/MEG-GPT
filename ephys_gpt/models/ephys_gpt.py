@@ -127,7 +127,9 @@ class EphysGPT(nn.Module):
 
         # Initialize loss layers
         self.cross_entropy_loss = CrossEntropyLoss(
-            loss_cfg.loss_sequence_length, loss_cfg.top_k,
+            loss_cfg.loss_sequence_length,
+            loss_cfg.top_k,
+            loss_cfg.label_smoothing,
         )
 
         # Initialize model weights
