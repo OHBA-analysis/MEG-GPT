@@ -13,7 +13,7 @@ if __name__ == "__main__":
     # ---------- Setting Up ---------- #
 
     # Set directories
-    BASE_DIR = Path("/well/woolrich/users/olt015/EphysGPT/examples/simulations")
+    BASE_DIR = Path("/well/woolrich/users/olt015/MEG-GPT/examples/simulations")
     REAL_DIR = Path("/well/win-camcan/shared/spring23/src")  # real data directory
     SIM_DIR = BASE_DIR / "data_tde"  # simulated data directory
 
