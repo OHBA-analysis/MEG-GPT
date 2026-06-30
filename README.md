@@ -1,6 +1,6 @@
 # MEG-GPT
 
-**MEG-GPT** is a transformer-based foundation model pretrained on non-invasive human electrophysiological signals (MEG/EEG). It employs a sequential spatial and temporal attention mechanism to learn whole brain dynamics from the human brain activity.
+MEG-GPT is a transformer-based foundation model pretrained on resting-state magnetoencephalography (MEG) data. It employs a sequential spatial and temporal attention mechanism to learn whole brain dynamics from the human brain activity.
 
 🙋‍♂️ Please email SungJun Cho at sungjun.cho@ndcn.ox.ac.uk or simply open a GitHub issue if you have any questions or concerns.
 
@@ -64,8 +64,6 @@ These scripts demonstrate how to configure, train, and evaluate the models. Each
 
 ## 📚 Project Structure
 
-<details> <summary><strong>Directory Tree</strong></summary>
-
 ```
 MEG-GPT/
 ├── envs/
@@ -81,7 +79,7 @@ MEG-GPT/
 │   │   ├── datasets.py                 # SimulationDataset: data sequencing and preparation
 │   │   ├── dataloader.py               # MEGGPTDataModule (LightningDataModule): train/val/test splits,
 │   │   │                               # batching, distributed samplers
-│   │   └── simulation.py               # TDEBurstSimulation: HMM-driven synthetic MEG/EEG data generation
+│   │   └── simulation.py               # TDEBurstSimulation: HMM-driven synthetic MEG data generation
 │   │
 │   ├── models/
 │   │   ├── decoder/
@@ -126,11 +124,3 @@ MEG-GPT/
         ├── 04_generate_data.py         # Autoregressive generation from trained checkpoint
         ├── 05_plot_results.py          # Visualize outputs and post-hoc analysis
 ```
-
-</details>
-
-## 🪪 License
-
-Copyright (c) 2026 [OHBA Analysis Group](https://github.com/OHBA-analysis). `MEG-GPT` is a free and open-source software licensed under the [MIT License](https://github.com/OHBA-analysis/MEG-GPT/blob/main/LICENSE).
-</content>
-</invoke>
