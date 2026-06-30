@@ -3,9 +3,9 @@
 # Import packages
 import mne
 from pathlib import Path
-from ephys_gpt.data.simulation import TDEBurstSimulation
-from ephys_gpt.utils.processing import standardize, time_delay_embed
-from ephys_gpt.utils.post_hoc import functional_connectivity
+from meg_gpt.data.simulation import TDEBurstSimulation
+from meg_gpt.utils.processing import standardize, time_delay_embed
+from meg_gpt.utils.post_hoc import functional_connectivity
 
 
 if __name__ == "__main__":
@@ -13,7 +13,7 @@ if __name__ == "__main__":
     # ---------- Setting Up ---------- #
 
     # Set directories
-    BASE_DIR = Path("/well/woolrich/users/olt015/EphysGPT/examples/simulations")
+    BASE_DIR = Path("/well/woolrich/users/olt015/MEG-GPT/examples/simulations")
     REAL_DIR = Path("/well/win-camcan/shared/spring23/src")  # real data directory
     SIM_DIR = BASE_DIR / "data_tde"  # simulated data directory
 

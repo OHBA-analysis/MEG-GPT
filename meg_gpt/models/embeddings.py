@@ -16,7 +16,7 @@ import torch
 import torch.nn as nn
 from einops import rearrange
 from typing import List, Optional
-from ephys_gpt.typing import Label
+from meg_gpt.typing import Label
 
 
 class SinusoidalPositionalEncoding(nn.Module):

@@ -1,4 +1,4 @@
-"""Basic layers and modules for the EphysGPT model."""
+"""Basic layers and modules for the MEG-GPT model."""
 
 # Import packages
 import torch

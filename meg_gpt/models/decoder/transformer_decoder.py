@@ -18,8 +18,8 @@ import torch.nn as nn
 from einops import rearrange
 from typing import List, Optional
 
-from ephys_gpt.models.decoder.attention import MultiHeadGASPAttention
-from ephys_gpt.models.utils import (
+from meg_gpt.models.decoder.attention import MultiHeadGASPAttention
+from meg_gpt.models.utils import (
     ChannelDropoutLayer,
     FeedForwardLayer,
     NormalizationLayer,
@@ -31,7 +31,7 @@ _logger = logging.getLogger(__name__)
 
 class DecoderLayer(nn.Module):
     """
-    A single layer of the EphysGPT Transformer Decoder, combining
+    A single layer of the MEG-GPT Transformer Decoder, combining
     Channel Attention, Time Attention, and Cross Attention.
     """
     def __init__(
@@ -238,7 +238,7 @@ class DecoderLayer(nn.Module):
 
 class TransformerDecoder(nn.Module):
     """
-    Transformer decoder used in the EphysGPT model.
+    Transformer decoder used in the MEG-GPT model.
     Stacks multiple DecoderLayers.
     """
     def __init__(

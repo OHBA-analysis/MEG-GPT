@@ -12,7 +12,7 @@ from tqdm.auto import tqdm
 from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 
 if TYPE_CHECKING:
-    from ephys_gpt.models.ephys_gpt import EphysGPTModule
+    from meg_gpt.models.meg_gpt import MEGGPTModule
 
 
 _logger = logging.getLogger(__name__)
@@ -78,14 +78,14 @@ def get_channel_embedding_affinity(
 
 
 def extract_channel_attention_matrix(
-    pl_module: "EphysGPTModule",
+    pl_module: "MEGGPTModule",
     dataloader: DataLoader,
     sample_size: Optional[Union[float, int]] = None,
     device: str = "cpu",
     aggregate: bool = False,
 ) -> Dict[int, torch.Tensor]:
     """
-    Extracts channel attention matrices from a trained EphysGPT model.
+    Extracts channel attention matrices from a trained MEG-GPT model.
 
     Uses `register_forward_hook` to capture the softmax attention matrices
     computed inside each channel-attention layer, iterating over all batches
@@ -99,19 +99,19 @@ def extract_channel_attention_matrix(
     registered as a buffer on the same module.
 
     Each batch dict is expected to have the same structure as the batches
-    produced by `EphysGPTDataModule`: a `"data"` key containing token labels
+    produced by `MEGGPTDataModule`: a `"data"` key containing token labels
     sequences, plus one key per entry in `extra_label_specs` (e.g.
     "subject_labels").
 
     Parameters
     ----------
-    pl_module : EphysGPTModule
-        Trained EphysGPT Lightning module.
+    pl_module : MEGGPTModule
+        Trained MEG-GPT Lightning module.
     dataloader : DataLoader
         DataLoader whose batches are dicts with at least a "data" key
         containing token labels sequences of shape (B, L+1, C), plus any
         extra-label keys required by the model config.
-        Typically the validation DataLoader from `EphysGPTDataModule`.
+        Typically the validation DataLoader from `MEGGPTDataModule`.
     sample_size : Optional[Union[float, int]]
         If provided, randomly subsample the dataloader's dataset before
         extracting attention matrices.

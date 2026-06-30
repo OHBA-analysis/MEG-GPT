@@ -1,6 +1,6 @@
-# EphysGPT
+# MEG-GPT
 
-**EphysGPT** is a transformer-based foundation model pretrained on non-invasive human electrophysiological signals (MEG/EEG). It employs a sequential spatial and temporal attention mechanism to learn whole brain dynamics from the human brain activity.
+**MEG-GPT** is a transformer-based foundation model pretrained on non-invasive human electrophysiological signals (MEG/EEG). It employs a sequential spatial and temporal attention mechanism to learn whole brain dynamics from the human brain activity.
 
 🙋‍♂️ Please email SungJun Cho at sungjun.cho@ndcn.ox.ac.uk or simply open a GitHub issue if you have any questions or concerns.
 
@@ -21,21 +21,21 @@ This project has the following dependencies:
 * pytorch-cuda=12.1
 * pytorch-lightning=2.6.1
 
-For a full list of required packages, please refer to `envs/egpt.yml`.
+For a full list of required packages, please refer to `envs/meg-gpt.yml`.
 
 ## 📌 Installation
 
-To install `EphysGPT`, you can follow the steps below:
+To install `MEG-GPT`, you can follow the steps below:
 
 1. Clone the repository.
    ```bash
-   git clone git@github.com:OHBA-analysis/EphysGPT.git
-   cd EphysGPT
+   git clone git@github.com:OHBA-analysis/MEG-GPT.git
+   cd MEG-GPT
    ```
 2. Create and activate a virtual environment.
    ```bash
-   mamba env create -f envs/egpt.yml
-   conda activate egpt
+   mamba env create -f envs/meg-gpt.yml
+   conda activate meg-gpt
    ```
 3. Install required packages.
    ```bash
@@ -67,19 +67,19 @@ These scripts demonstrate how to configure, train, and evaluate the models. Each
 <details> <summary><strong>Directory Tree</strong></summary>
 
 ```
-EphysGPT/
+MEG-GPT/
 ├── envs/
-│   └── egpt.yml                        # Conda environment specification (dependencies for training and experiments)
+│   └── meg-gpt.yml                     # Conda environment specification (dependencies for training and experiments)
 │
-├── ephys_gpt/
+├── meg_gpt/
 │   ├── configs/
 │   │   ├── __init__.py                 # Exports Config wrapper and get_config() factory
-│   │   └── config.py                   # Configuration dataclasses (EphysGPTConfig, InputEmbeddingConfig,
+│   │   └── config.py                   # Configuration dataclasses (MEGGPTConfig, InputEmbeddingConfig,
 │   │                                   # TransformerDecoderConfig, TrainingConfig, LossConfig)
 │   │
 │   ├── data/
 │   │   ├── datasets.py                 # SimulationDataset: data sequencing and preparation
-│   │   ├── dataloader.py               # EphysGPTDataModule (LightningDataModule): train/val/test splits,
+│   │   ├── dataloader.py               # MEGGPTDataModule (LightningDataModule): train/val/test splits,
 │   │   │                               # batching, distributed samplers
 │   │   └── simulation.py               # TDEBurstSimulation: HMM-driven synthetic MEG/EEG data generation
 │   │
@@ -90,8 +90,8 @@ EphysGPT/
 │   │   │                               # optional cross-attention, per-layer patchification)
 │   │   │
 │   │   ├── embeddings.py               # InputEmbeddingLayer (token + position + channel + extra-label)
-│   │   ├── ephys_gpt.py                # EphysGPT (nn.Module): ShiftTokenLayer → Embedding → Decoder → Prediction Head;
-│   │   │                               # EphysGPTModule (LightningModule): training loop, save/load
+│   │   ├── meg_gpt.py                  # MEG-GPT (nn.Module): ShiftTokenLayer → Embedding → Decoder → Prediction Head;
+│   │   │                               # MEGGPTModule (LightningModule): training loop, save/load
 │   │   └── utils.py                    # Supporting layers (layer norm, feedforward blocks, etc.)
 │   │
 │   ├── optim/
@@ -101,7 +101,7 @@ EphysGPT/
 │   │   └── optimizer.py                # Optimizer and LR schedulers
 │   │
 │   ├── inference/
-│   │   └── generator.py                # EphysGPTGenerator: loads checkpoint, autoregressive sampling
+│   │   └── generator.py                # MEGGPTGenerator: loads checkpoint, autoregressive sampling
 │   │
 │   ├── utils/
 │   │   ├── array_ops.py                # Array manipulation utilities (sliding windows, etc.)
@@ -116,13 +116,13 @@ EphysGPT/
     └── simulations/
         ├── models/
         │   ├── generator/
-        │   │   └── config.yaml         # Hydra config for EphysGPT training
+        │   │   └── config.yaml         # Hydra config for MEG-GPT training
         │   └── tokenizer/
         │       └── config.yaml         # Hydra config for tokenizer training
         │
         ├── 01_simulate_data.py         # Generate synthetic TDE burst data
         ├── 02_train_tokenizer.py       # Train EphysTokenizer on simulated data
-        ├── 03_train_ephys_gpt.py       # Train EphysGPT on tokenised data (Hydra + Lightning)
+        ├── 03_train_meg_gpt.py         # Train MEG-GPT on tokenised data (Hydra + Lightning)
         ├── 04_generate_data.py         # Autoregressive generation from trained checkpoint
         ├── 05_plot_results.py          # Visualize outputs and post-hoc analysis
 ```
@@ -131,4 +131,6 @@ EphysGPT/
 
 ## 🪪 License
 
-Copyright (c) 2026 [OHBA Analysis Group](https://github.com/OHBA-analysis). `EphysGPT` is a free and open-source software licensed under the [MIT License](https://github.com/OHBA-analysis/EphysGPT/blob/main/LICENSE).
+Copyright (c) 2026 [OHBA Analysis Group](https://github.com/OHBA-analysis). `MEG-GPT` is a free and open-source software licensed under the [MIT License](https://github.com/OHBA-analysis/MEG-GPT/blob/main/LICENSE).
+</content>
+</invoke>

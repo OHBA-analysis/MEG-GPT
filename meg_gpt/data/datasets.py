@@ -1,4 +1,4 @@
-"""PyTorch Datasets for EphysGPT training."""
+"""PyTorch Datasets for MEG-GPT training."""
 
 # Import packages
 import logging

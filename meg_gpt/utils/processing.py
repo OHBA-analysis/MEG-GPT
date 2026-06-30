@@ -4,7 +4,7 @@
 import numpy as np
 from scipy import signal
 from typing import Optional
-from ephys_gpt.utils.array_ops import sliding_window_view
+from meg_gpt.utils.array_ops import sliding_window_view
 
 
 def standardize(

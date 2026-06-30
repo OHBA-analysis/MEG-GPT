@@ -10,8 +10,8 @@ from pqdm.threads import pqdm
 from sklearn.covariance import LedoitWolf
 from tqdm.auto import trange
 from typing import Optional, Dict
-from ephys_gpt.utils import array_ops
-from ephys_gpt.utils.processing import (
+from meg_gpt.utils import array_ops
+from meg_gpt.utils.processing import (
     amplitude_envelope, moving_average, standardize, temporal_filter
 )
 
