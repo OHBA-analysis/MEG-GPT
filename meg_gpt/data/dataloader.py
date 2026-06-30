@@ -1,4 +1,4 @@
-"""PyTorch DataLoader and Lightning DataModule for EphysGPT training."""
+"""PyTorch DataLoader and Lightning DataModule for MEG-GPT training."""
 
 # Import packages
 from __future__ import annotations
@@ -138,9 +138,9 @@ def _make_dataloader(
     )
 
 
-class EphysGPTDataModule(pl.LightningDataModule):
+class MEGGPTDataModule(pl.LightningDataModule):
     """
-    Lightning DataModule for training the EphysGPT model.
+    Lightning DataModule for training the MEG-GPT model.
 
     Parameters
     ----------

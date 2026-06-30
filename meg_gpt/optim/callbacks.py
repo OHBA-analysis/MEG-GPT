@@ -1,4 +1,4 @@
-"""Callback functions for the EphysGPT training."""
+"""Callback functions for the MEG-GPT training."""
 
 # Import packages
 import logging

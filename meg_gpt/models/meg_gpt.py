@@ -1,5 +1,5 @@
 """
-Implementation of the EphysGPT model.
+Implementation of the MEG-GPT model.
 
 Mathematical Notation:
     - B : batch size
@@ -19,13 +19,13 @@ import torch.nn as nn
 from glob import glob
 from omegaconf import OmegaConf
 from typing import Dict, List, Optional
-from ephys_gpt.configs import Config, get_config
-from ephys_gpt.models import InputEmbeddingLayer, TransformerDecoder
-from ephys_gpt.models.embeddings import LearnedPositionEmbedding
-from ephys_gpt.models.utils import ShiftTokenLayer
-from ephys_gpt.optim.losses import CrossEntropyLoss
-from ephys_gpt.optim.optimizer import resolve_optimizer, resolve_lr_scheduler
-from ephys_gpt.optim.initializer import init_model_weights
+from meg_gpt.configs import Config, get_config
+from meg_gpt.models import InputEmbeddingLayer, TransformerDecoder
+from meg_gpt.models.embeddings import LearnedPositionEmbedding
+from meg_gpt.models.utils import ShiftTokenLayer
+from meg_gpt.optim.losses import CrossEntropyLoss
+from meg_gpt.optim.optimizer import resolve_optimizer, resolve_lr_scheduler
+from meg_gpt.optim.initializer import init_model_weights
 
 
 logging.basicConfig(level=logging.INFO)
@@ -61,9 +61,9 @@ def _get_param_groups(model: nn.Module, weight_decay: float) -> List[Dict]:
     ]
 
 
-class EphysGPT(nn.Module):
+class MEGGPT(nn.Module):
     """
-    EphysGPT class.
+    MEG-GPT class.
 
     Parameters
     ----------
@@ -74,7 +74,7 @@ class EphysGPT(nn.Module):
         super().__init__()
         self.config = config.config_class
 
-        _logger.info("Initializing EphysGPT model.")
+        _logger.info("Initializing MEG-GPT model.")
 
         # Get configs for each model components
         emb_cfg = self.config.input_embedding
@@ -218,9 +218,9 @@ class EphysGPT(nn.Module):
         self.transformer_decoder.plot_attention_masks(save_path=save_path)
 
 
-class EphysGPTModule(pl.LightningModule):
+class MEGGPTModule(pl.LightningModule):
     """
-    EphysGPT Lightning Module.
+    MEG-GPT Lightning Module.
 
     Parameters
     ----------
@@ -231,7 +231,7 @@ class EphysGPTModule(pl.LightningModule):
         super().__init__()
         self.base_config = config
         self.config = config.config_class
-        self.model = EphysGPT(config)
+        self.model = MEGGPT(config)
 
     def forward(
         self,

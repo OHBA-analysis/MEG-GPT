@@ -18,9 +18,9 @@ from ephys_tokenizer.models.ephys_tokenizer import EphysTokenizerModule
 from ephys_tokenizer.utils import plotting
 from ephys_tokenizer.utils.train import get_history
 
-from ephys_gpt.data.datasets import SimulationDataset
-from ephys_gpt.data.dataloader import EphysGPTDataModule
-from ephys_gpt.utils.processing import standardize, temporal_filter
+from meg_gpt.data.datasets import SimulationDataset
+from meg_gpt.data.dataloader import MEGGPTDataModule
+from meg_gpt.utils.processing import standardize, temporal_filter
 
 
 _logger = logging.getLogger(__name__)
@@ -105,7 +105,7 @@ def main(cfg: DictConfig):
         info=["subject", "dataset"],
         standardize=False,
     )
-    sim_datamodule = EphysGPTDataModule(
+    sim_datamodule = MEGGPTDataModule(
         dataset=sim_data,
         batch_size=batch_size,
         val_split=0,

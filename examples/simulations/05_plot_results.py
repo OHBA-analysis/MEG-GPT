@@ -8,9 +8,9 @@ import pickle
 import seaborn as sns
 from pathlib import Path
 from scipy import signal
-from ephys_gpt.utils.processing import standardize, time_delay_embed
-from ephys_gpt.utils.post_hoc import functional_connectivity, compute_aec
-from ephys_gpt.utils.plotting import plot_history
+from meg_gpt.utils.processing import standardize, time_delay_embed
+from meg_gpt.utils.post_hoc import functional_connectivity, compute_aec
+from meg_gpt.utils.plotting import plot_history
 
 
 _logger = logging.getLogger(__name__)

@@ -18,7 +18,7 @@ from ephys_tokenizer.models.ephys_tokenizer import EphysTokenizerModule
 from ephys_tokenizer.utils import plotting
 from ephys_tokenizer.utils.train import get_history
 
-from ephys_gpt.data.dataloader import EphysGPTDataModule
+from meg_gpt.data.dataloader import MEGGPTDataModule
 
 
 _logger = logging.getLogger(__name__)
@@ -99,7 +99,7 @@ def main(cfg: DictConfig):
         include_subjects=subject_ids,
         verbose=False,
     )
-    camcan_datamodule = EphysGPTDataModule(
+    camcan_datamodule = MEGGPTDataModule(
         dataset=camcan_data,
         batch_size=batch_size,
         val_split=0,
@@ -211,7 +211,7 @@ def main(cfg: DictConfig):
             include_subjects=[subject_ids[0]],
             verbose=False,
         )
-        ex_datamodule = EphysGPTDataModule(
+        ex_datamodule = MEGGPTDataModule(
             dataset=ex_data,
             batch_size=batch_size,
             val_split=0,

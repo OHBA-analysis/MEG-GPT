@@ -12,7 +12,7 @@ from tqdm.auto import tqdm
 
 from ephys_tokenizer.configs import get_config
 from ephys_tokenizer.models.ephys_tokenizer import EphysTokenizerModule
-from ephys_gpt.data.dataloader import EphysGPTDataModule
+from meg_gpt.data.dataloader import MEGGPTDataModule
 
 
 _logger = logging.getLogger(__name__)
@@ -96,7 +96,7 @@ def main(cfg: DictConfig):
             include_subjects=part_subjects,
             verbose=False,
         )
-        camcan_datamodule = EphysGPTDataModule(
+        camcan_datamodule = MEGGPTDataModule(
             dataset=camcan_data,
             batch_size=batch_size,
             val_split=0,

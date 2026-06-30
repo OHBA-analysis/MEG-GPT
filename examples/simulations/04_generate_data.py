@@ -1,4 +1,4 @@
-"""Generate simulated data using trained EphysGPT model."""
+"""Generate simulated data using trained MEG-GPT model."""
 
 # Import packages
 import gc
@@ -10,8 +10,8 @@ import torch
 from omegaconf import DictConfig, OmegaConf
 from pathlib import Path
 
-from ephys_gpt.inference.generator import EphysGPTGenerator
-from ephys_gpt.models.ephys_gpt import EphysGPTModule
+from meg_gpt.inference.generator import MEGGPTGenerator
+from meg_gpt.models.meg_gpt import MEGGPTModule
 from ephys_tokenizer.models.ephys_tokenizer import EphysTokenizerModule
 
 
@@ -60,8 +60,8 @@ def main(cfg: DictConfig):
         )
     else:
         # Load model
-        _logger.info("Loading EphysGPT model ...")
-        pl_module = EphysGPTModule.load_model(run_dir, checkpoint=checkpoint)
+        _logger.info("Loading MEG-GPT model ...")
+        pl_module = MEGGPTModule.load_model(run_dir, checkpoint=checkpoint)
         pl_module.to(device)
 
         # Load tokenizer
@@ -77,7 +77,7 @@ def main(cfg: DictConfig):
     gen_batch_size = 3
 
     # Initialize generator
-    generator = EphysGPTGenerator(
+    generator = MEGGPTGenerator(
         model=pl_module.model,
         tokenizer=tkn_module,
     )

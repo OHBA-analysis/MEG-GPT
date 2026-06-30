@@ -1,5 +1,5 @@
 """
-EphysGPT generator class during inference time.
+MEG-GPT generator class during inference time.
 
 Mathematical Notation:
     - B   : batch size
@@ -18,18 +18,18 @@ import torch
 import torch.nn as nn
 from tqdm.auto import trange
 from typing import List, Optional, Union
-from ephys_gpt.utils.sampling import sample_from_logits
+from meg_gpt.utils.sampling import sample_from_logits
 
 
-class EphysGPTGenerator:
+class MEGGPTGenerator:
     """
-    EphysGPT generator class providing autoregressive sampling logic
-    for the EphysGPT PyTorch Lightning module.
+    MEG-GPT generator class providing autoregressive sampling logic
+    for the MEG-GPT PyTorch Lightning module.
 
     Parameters
     ----------
     model : nn.Module
-        The EphysGPT model.
+        The MEG-GPT model.
     tokenizer : pl.LightningModule
         The tokenizer LightningModule used for tokenization.
     """
@@ -245,7 +245,7 @@ class EphysGPTGenerator:
 
     def generate_data(self, **kwargs):
         """
-        Generates data from the EphysGPT model.
+        Generates data from the MEG-GPT model.
 
         Parameters
         ----------

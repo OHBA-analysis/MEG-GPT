@@ -1,11 +1,11 @@
-"""Configuration class for EphysGPT."""
+"""Configuration class for MEG-GPT."""
 
 # Import packages
 import numpy as np
 from dataclasses import dataclass, field
 from omegaconf import DictConfig, OmegaConf
 from typing import Any, Dict, List, Optional
-from ephys_gpt.typing import Label
+from meg_gpt.typing import Label
 
 
 @dataclass
@@ -70,11 +70,11 @@ class TrainingConfig:
 
 
 @dataclass
-class EphysGPTConfig:
+class MEGGPTConfig:
     """
-    EphysGPT based on the decoder-only transformer architecture.
+    MEG-GPT based on the decoder-only transformer architecture.
     """
-    name: str = "ephys_gpt"
+    name: str = "meg_gpt"
 
     # Base defaults
     sequence_length: Optional[int] = None

@@ -18,11 +18,11 @@ data_config:
   data_dir: null           # directory containing data to use
   sampling_frequency: 100  # unit: Hz
 
-# EphysGPT Settings
+# MEG-GPT Settings
 model_config:
 
   # Meta data
-  name: ephys_gpt
+  name: meg_gpt
 
   # Base config
   sequence_length: 100

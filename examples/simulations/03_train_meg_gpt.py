@@ -1,4 +1,4 @@
-"""Train EphysGPT on the simulated data."""
+"""Train MEG-GPT on the simulated data."""
 
 # Import packages
 import hydra
@@ -11,12 +11,12 @@ import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelSummary, TQDMProgressBar
 from pytorch_lightning.loggers import CSVLogger, WandbLogger
 
-from ephys_gpt.configs import get_config
-from ephys_gpt.data.datasets import SimulationDataset
-from ephys_gpt.data.dataloader import EphysGPTDataModule
-from ephys_gpt.models.ephys_gpt import EphysGPTModule
-from ephys_gpt.optim import callbacks
-from ephys_gpt.utils.post_hoc import get_history
+from meg_gpt.configs import get_config
+from meg_gpt.data.datasets import SimulationDataset
+from meg_gpt.data.dataloader import MEGGPTDataModule
+from meg_gpt.models.meg_gpt import MEGGPTModule
+from meg_gpt.optim import callbacks
+from meg_gpt.utils.post_hoc import get_history
 
 
 _logger = logging.getLogger(__name__)
@@ -71,9 +71,9 @@ def main(cfg: DictConfig):
         _logger.warning("Multi-GPU training is not enabled in the model config. Enabling now ...")
         multi_gpu = True
 
-    # Load EphysGPT model config
+    # Load MEG-GPT model config
     model_config = get_config(cfg.model_config)  # Config object
-    model_cfg = model_config.config_class  # EphysGPT-specific Config object
+    model_cfg = model_config.config_class  # MEG-GPT-specific Config object
 
     # Get directories
     Path(run_dir).mkdir(parents=True, exist_ok=True)
@@ -93,7 +93,7 @@ def main(cfg: DictConfig):
         info=["subject", "dataset"],
         standardize=False,
     )
-    sim_datamodule = EphysGPTDataModule(
+    sim_datamodule = MEGGPTDataModule(
         dataset=sim_data,
         batch_size=batch_size,
         val_split=val_split,
@@ -109,10 +109,10 @@ def main(cfg: DictConfig):
     # ---------- Model Training ---------- #
 
     if checkpoint is None:
-        _logger.info("Training EphysGPT model ...")
+        _logger.info("Training MEG-GPT model ...")
 
         # Build network via Lightning module
-        pl_module = EphysGPTModule(model_config)
+        pl_module = MEGGPTModule(model_config)
 
         # Set loggers
         csv_logger = CSVLogger(save_dir=run_dir, name="csv_logs")
@@ -120,7 +120,7 @@ def main(cfg: DictConfig):
 
         if wandb_cfg.get("enabled", False):
             wandb_logger = WandbLogger(
-                project=wandb_cfg.get("project", "EphysGPT"),
+                project=wandb_cfg.get("project", "MEG-GPT"),
                 name=wandb_cfg.get("name", None),
                 save_dir=run_dir,
             )
