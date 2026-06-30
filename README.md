@@ -21,7 +21,7 @@ This project has the following dependencies:
 * pytorch-cuda=12.1
 * pytorch-lightning=2.6.1
 
-For a full list of required packages, please refer to `envs/egpt.yml`.
+For a full list of required packages, please refer to `envs/meg-gpt.yml`.
 
 ## 📌 Installation
 
@@ -34,8 +34,8 @@ To install `MEG-GPT`, you can follow the steps below:
    ```
 2. Create and activate a virtual environment.
    ```bash
-   mamba env create -f envs/egpt.yml
-   conda activate egpt
+   mamba env create -f envs/meg-gpt.yml
+   conda activate meg-gpt
    ```
 3. Install required packages.
    ```bash
@@ -69,7 +69,7 @@ These scripts demonstrate how to configure, train, and evaluate the models. Each
 ```
 MEG-GPT/
 ├── envs/
-│   └── egpt.yml                        # Conda environment specification (dependencies for training and experiments)
+│   └── meg-gpt.yml                     # Conda environment specification (dependencies for training and experiments)
 │
 ├── meg_gpt/
 │   ├── configs/
