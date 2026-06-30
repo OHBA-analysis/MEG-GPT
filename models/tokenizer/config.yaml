@@ -1,0 +1,44 @@
+# Main Script Settings
+main:
+  run_dir: ./models/tokenizer  # directory to save checkpoints and logs
+  gpus: 1                      # number of GPUs to use (0 = CPU)
+  precision: 32                # precision level (16 or 32)
+  deterministic: True          # enable deterministic training
+  seed: 1                      # random seed
+  checkpoint: null             # path to a pre-trained model checkpoint
+
+# Dataset Settings
+data_config:
+  data_dir: /well/woolrich/projects/fm_datasets/v0/parcellated  # directory containing data to use
+  sampling_frequency: 250                                       # unit: Hz
+  val_split: 0.1
+  split_method: subject_window
+  num_workers: 8
+
+# Tokenizer Settings
+model_config:
+
+  # Meta data
+  name: ephys_tokenizer
+  
+  # Model config
+  n_channels: 52
+  n_tokens: 128
+  rnn_n_units: 128
+  sequence_length: 200
+  token_dim: 10
+  token_kernel_padding: causal
+
+  # Training config
+  training:
+    batch_size: 128
+    n_epochs: 20
+    optimizer:
+      learning_rate: 1.0e-05
+    multi_gpu: False
+
+  # Callback config
+  callback:
+    temperature_annealing:
+      n_annealing_epochs: 20
+      n_stages: 20
