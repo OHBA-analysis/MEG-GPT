@@ -2,6 +2,7 @@
 
 # Import packages
 import numpy as np
+import torch
 from scipy import signal
 from typing import Optional
 from meg_gpt.utils.array_ops import sliding_window_view
@@ -143,6 +144,91 @@ def amplitude_envelope(x: np.ndarray) -> np.ndarray:
     # Apply Hilbert transform
     x_env = np.abs(signal.hilbert(x, axis=0))
     return x_env.astype(x.dtype)
+
+
+def welch_psd(
+    x: torch.Tensor,
+    segment_length: int,
+    overlap: float = 0.5,
+    fs: float = 1.0,
+    detrend: bool = True,
+) -> torch.Tensor:
+    """
+    Welch PSD estimate over the last axis.
+
+    Pure-PyTorch implementation (Hann window, density-scaled, one-sided rFFT)
+    that matches ``scipy.signal.welch(..., window="hann", scaling="density",
+    return_onesided=True, average="mean")`` to within floating-point
+    tolerance. Lives here so both the online sampler and offline
+    target-PSD computation share one definition of the frequency axis.
+
+    Parameters
+    ----------
+    x : torch.Tensor
+        Real-valued input. Shape is ``(*batch_dims, T)``.
+        Welch is computed along the last axis.
+    segment_length : int
+        Length of each Welch segment (``nperseg``).
+    overlap : float, optional
+        Fractional overlap in ``[0, 1)`` between consecutive segments.
+        Defaults to 0.5.
+    fs : float, optional
+        Sampling frequency. Only affects the absolute scale of the returned
+        PSD (density: units of x^2/fs). Defaults to 1.0.
+    detrend : bool, optional
+        If True, subtract the mean from each segment before windowing
+        (matches ``scipy.signal.welch(detrend="constant")``). Defaults to True.
+
+    Returns
+    -------
+    psd : torch.Tensor
+        One-sided PSD of shape ``(*batch_dims, F)`` where
+        ``F = segment_length // 2 + 1``.
+    """
+    # Validation
+    if segment_length <= 0:
+        raise ValueError(f"segment_length must be > 0; got {segment_length}.")
+    if not (0.0 <= overlap < 1.0):
+        raise ValueError(f"overlap must be in [0, 1); got {overlap}.")
+    T = x.shape[-1]
+    if T < segment_length:
+        raise ValueError(
+            f"Input length ({T}) is shorter than segment_length ({segment_length})."
+        )
+
+    n_overlap = int(segment_length * overlap)  # truncate to match scipy
+    step = max(1, segment_length - n_overlap)
+    n_segments = 1 + (T - segment_length) // step
+
+    # Build segments
+    segments = x.unfold(dimension=-1, size=segment_length, step=step)
+    segments = segments[..., :n_segments, :]
+
+    if detrend:
+        segments = segments - segments.mean(dim=-1, keepdim=True)
+
+    window = torch.hann_window(
+        segment_length, periodic=True, dtype=x.dtype, device=x.device
+    )  # matches scipy.signal.get_window("hann", N, fftbins=True)
+    win_energy = (window * window).sum()  # scalar
+
+    windowed = segments * window
+    spectrum = torch.fft.rfft(windowed, n=segment_length, dim=-1)
+    power = spectrum.real.pow(2) + spectrum.imag.pow(2)
+
+    # Density scaling (one-sided, so double interior bins but not DC / Nyquist)
+    F = segment_length // 2 + 1
+    scale = 1.0 / (fs * win_energy)
+    psd = power * scale
+    if F > 1:
+        # Interior bins
+        if segment_length % 2 == 0:
+            psd[..., 1:-1] = psd[..., 1:-1] * 2.0
+        else:
+            psd[..., 1:] = psd[..., 1:] * 2.0
+
+    psd = psd.mean(dim=-2)  # average across segments
+    return psd
 
 
 def moving_average(x: np.ndarray, n_window: int) -> np.ndarray:

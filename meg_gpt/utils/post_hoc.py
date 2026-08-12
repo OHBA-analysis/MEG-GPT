@@ -7,6 +7,7 @@ import pandas as pd
 import pickle
 from pathlib import Path
 from pqdm.threads import pqdm
+from scipy import signal
 from sklearn.covariance import LedoitWolf
 from tqdm.auto import trange
 from typing import Optional, Dict
@@ -280,3 +281,182 @@ def compute_aec(
     aec = functional_connectivity(data_env_ma, conn_type="corr")
 
     return aec
+
+
+def compute_coherence(
+    data: np.ndarray,
+    sampling_frequency: int,
+    low_freq: Optional[float] = None,
+    high_freq: Optional[float] = None,
+    nperseg: Optional[int] = None,
+    do_standardize: bool = False,
+) -> np.ndarray:
+    """
+    Computes the band-averaged magnitude-squared coherence between every
+    pair of channels.
+
+    For each pair of channels ``i, j``, magnitude-squared coherence is
+
+    .. math::
+        C_{ij}(f) = \\frac{|S_{ij}(f)|^2}{S_{ii}(f) \\, S_{jj}(f)}
+
+    where :math:`S_{ij}(f)` is the cross-spectral density (Welch estimate)
+    and :math:`S_{ii}(f)` is the auto-spectral density of channel :math:`i`.
+    The returned matrix is the mean of :math:`C_{ij}(f)` over the requested
+    frequency band.
+
+    Coherence is scale-invariant and lies in :math:`[0, 1]`. Unlike PLI it
+    is sensitive to zero-lag (constant-phase) coupling, so it is a less
+    stringent test of phase synchronization but a more general test of any
+    consistent linear cross-channel relationship at a given frequency.
+
+    Parameters
+    ----------
+    data : np.ndarray
+        Input data of shape (n_samples, n_channels).
+    sampling_frequency : int
+        Sampling frequency in Hz.
+    low_freq : float, optional
+        Lower bound of the band to average coherence over. Defaults to the
+        first positive frequency bin.
+    high_freq : float, optional
+        Upper bound of the band to average coherence over. Defaults to the
+        Nyquist frequency.
+    nperseg : int, optional
+        Welch / CSD segment length in samples. Defaults to four seconds
+        worth of samples, capped at the data length. For coherence in a
+        narrow low-frequency band (e.g. 1-4 Hz) you typically want
+        ``nperseg`` to span at least 4-8 cycles of the lowest frequency.
+    do_standardize : bool, optional
+        Standardize per-channel before computing.
+
+    Returns
+    -------
+    coh : np.ndarray
+        Coherence matrix of shape (n_channels, n_channels). Diagonal is 1.
+    """
+    # Standardize data
+    if do_standardize:
+        data = standardize(data, axis=0)
+
+    n_samples, n_channels = data.shape
+    if nperseg is None:
+        nperseg = min(int(4 * sampling_frequency), n_samples)
+    noverlap = nperseg // 2
+
+    # Per-channel auto-spectra in one Welch call
+    f, Pxx = signal.welch(
+        data,
+        fs=sampling_frequency,
+        nperseg=nperseg,
+        noverlap=noverlap,
+        axis=0,
+    )
+    # Pxx.shape: (n_freqs, n_channels)
+
+    if low_freq is None:
+        low_freq = float(f[0])
+    if high_freq is None:
+        high_freq = float(f[-1])
+    band = (f >= low_freq) & (f <= high_freq)
+    if not band.any():
+        raise ValueError(
+            f"No frequency bins fall inside [{low_freq}, {high_freq}] Hz at "
+            f"the chosen nperseg={nperseg}. Use a longer nperseg or widen the band."
+        )
+
+    coh = np.zeros((n_channels, n_channels), dtype=np.float64)
+    eps = 1e-20
+    for i in range(n_channels):
+        coh[i, i] = 1.0
+        for j in range(i + 1, n_channels):
+            _, Sxy = signal.csd(
+                data[:, i], data[:, j],
+                fs=sampling_frequency, nperseg=nperseg, noverlap=noverlap,
+            )
+            coh_ij = np.abs(Sxy) ** 2 / (Pxx[:, i] * Pxx[:, j] + eps)
+            val = float(np.mean(coh_ij[band]))
+            coh[i, j] = coh[j, i] = val
+
+    return coh.astype(data.dtype)
+
+
+def compute_pli(
+    data: np.ndarray,
+    sampling_frequency: int,
+    low_freq: Optional[float] = None,
+    high_freq: Optional[float] = None,
+    do_standardize: bool = False,
+) -> np.ndarray:
+    """
+    Computes the phase lag index (PLI) of the input data.
+
+    For each pair of channels ``i, j``, PLI is defined as the absolute value
+    of the time-average of the sign of the instantaneous phase difference:
+
+    .. math::
+        \\mathrm{PLI}_{ij} = \\bigl|\\langle \\mathrm{sign}\\bigl(\\sin(
+        \\varphi_i(t) - \\varphi_j(t))\\bigr) \\rangle_t\\bigr|
+
+    where :math:`\\varphi(t) = \\angle\\,\\mathcal{H}[x(t)]` is the instantaneous
+    phase from the Hilbert transform. PLI is bounded in :math:`[0, 1]`: 0
+    corresponds to no consistent (non-zero) phase lag, and 1 corresponds to
+    a perfectly consistent non-zero phase lag.
+
+    Parameters
+    ----------
+    data : np.ndarray
+        Input data array to compute PLI. Shape should be (n_samples, n_channels).
+    sampling_frequency : int
+        Sampling frequency of the input data.
+    low_freq : float, optional
+        Lower frequency bound for bandpass filtering.
+    high_freq : float, optional
+        Upper frequency bound for bandpass filtering.
+    do_standardize : bool, optional
+        Whether to standardize the input data first.
+
+    Returns
+    -------
+    pli : np.ndarray
+        PLI matrix of shape (n_channels, n_channels).
+    """
+    # Standardize data
+    if do_standardize:
+        data = standardize(data, axis=0)
+
+    # Apply bandpass filter
+    if low_freq is not None or high_freq is not None:
+        data_filt = temporal_filter(
+            x=data,
+            sampling_frequency=sampling_frequency,
+            low_freq=low_freq,
+            high_freq=high_freq,
+        )
+    else:
+        data_filt = data
+
+    # Compute analytic signal and sin/cos of instantaneous phase
+    analytic = signal.hilbert(data_filt, axis=0)
+    magnitude = np.abs(analytic)
+    sin_phi = analytic.imag / magnitude
+    cos_phi = analytic.real / magnitude
+
+    # Accumulate sum_t sign(sin(phi_i - phi_j)) in chunks to avoid building
+    # a full (n_samples, n_channels, n_channels) array
+    n_samples, n_channels = data_filt.shape
+    chunk = max(1, int(2**25 // max(1, n_channels * n_channels)))
+    accum = np.zeros((n_channels, n_channels), dtype=np.float64)
+    for t0 in range(0, n_samples, chunk):
+        t1 = min(t0 + chunk, n_samples)
+        s = sin_phi[t0:t1]
+        c = cos_phi[t0:t1]
+        sgn = np.sign(
+            s[:, :, None] * c[:, None, :] - c[:, :, None] * s[:, None, :]
+        )
+        accum += sgn.sum(axis=0)
+    # NOTE: This uses the identity sin(phi_i - phi_j) = sin(phi_i) * cos(phi_j) 
+    #       - cos(phi_i) * sin(phi_j).
+
+    pli = np.abs(accum / n_samples)
+    return pli.astype(data.dtype)
