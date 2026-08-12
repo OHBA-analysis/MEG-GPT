@@ -12,6 +12,7 @@ Mathematical Notation:
 from __future__ import annotations
 
 import math
+import numpy as np
 import torch
 import torch.nn as nn
 from einops import rearrange
@@ -159,6 +160,116 @@ class LearnedPositionEmbedding(nn.Module):
         return embeddings.expand(target_shape)
 
 
+class RotaryEmbedding(nn.Module):
+    """
+    Rotary Position Embedding (RoPE) from Su et al., 2021
+    (https://arxiv.org/abs/2104.09864), using the half-rotation convention
+    popularised by GPT-NeoX / LLaMA.
+
+    RoPE encodes position by rotating pairs of features in the Q/K vectors as
+    a function of their absolute position. Because the rotation matrix is
+    orthogonal, the dot product between rotated queries and keys depends only
+    on the *relative* offset between their positions.
+
+    This module has no trainable parameters. Cos/sin tables are precomputed
+    and stored as non-persistent buffers, so they follow the module's device
+    and dtype and are excluded from ``state_dict``.
+
+    Parameters
+    ----------
+    head_dim : int
+        Per-head feature dimension. Must be even.
+    max_len : int
+        Maximum sequence length the rotation will be applied to.
+    base : float
+        Frequency base θ. Default 10000.0 (original paper).
+    """
+    def __init__(self, head_dim: int, max_len: int, base: float = 10000.0):
+        super().__init__()
+        if head_dim % 2 != 0:
+            raise ValueError(
+                f"head_dim must be even for RoPE, but got {head_dim}."
+            )
+        if max_len <= 0:
+            raise ValueError(f"max_len must be positive, but got {max_len}.")
+        if base <= 0:
+            raise ValueError(f"base must be positive, but got {base}.")
+
+        self.head_dim = head_dim
+        self.max_len = max_len
+        self.base = base
+
+        # Compute inverse frequencies (computed in fp32 for stability)
+        inv_freq = 1.0 / (
+            base ** (torch.arange(0, head_dim, 2, dtype=torch.float32) / head_dim)
+        )
+        # shape: (head_dim // 2,)
+
+        positions = torch.arange(max_len, dtype=torch.float32)
+        freqs = torch.outer(positions, inv_freq)
+        # shape: (max_len, head_dim // 2)
+
+        # Duplicate frequencies along the last dim so that the rotation pairs
+        # feature i with feature i + head_dim // 2 (the half-rotation layout)
+        emb = torch.cat((freqs, freqs), dim=-1)
+        # shape: (max_len, head_dim)
+
+        # Register as non-persistent buffers (excluded from state_dict)
+        self.register_buffer("cos_cached", emb.cos(), persistent=False)
+        self.register_buffer("sin_cached", emb.sin(), persistent=False)
+
+    @staticmethod
+    def _rotate_half(x: torch.Tensor) -> torch.Tensor:
+        """Rotates the two halves of the last dim: [x1, x2] -> [-x2, x1]."""
+        x1, x2 = x.chunk(2, dim=-1)
+        return torch.cat((-x2, x1), dim=-1)
+
+    def apply(self, x: torch.Tensor, position_ids: torch.Tensor) -> torch.Tensor:
+        """
+        Rotate ``x`` along its last dimension using ``position_ids``.
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            Tensor with shape ``(..., L, head_dim)`` where ``L`` is the
+            sequence length being rotated.
+        position_ids : torch.Tensor
+            1-D long tensor of length ``L`` holding absolute position indices
+            into the cos/sin tables. All entries must be in ``[0, max_len)``.
+
+        Returns
+        -------
+        torch.Tensor
+            Rotated tensor with the same shape and dtype as ``x``.
+        """
+        if x.size(-1) != self.head_dim:
+            raise ValueError(
+                f"Last dim of x ({x.size(-1)}) must equal head_dim "
+                f"({self.head_dim})."
+            )
+        if x.size(-2) != position_ids.numel():
+            raise ValueError(
+                f"Sequence axis of x ({x.size(-2)}) must equal len(position_ids) "
+                f"({position_ids.numel()})."
+            )
+        if int(position_ids.max()) >= self.max_len or int(position_ids.min()) < 0:
+            raise ValueError(
+                f"position_ids must lie in [0, {self.max_len}); got "
+                f"range [{int(position_ids.min())}, {int(position_ids.max())}]."
+            )
+
+        cos = self.cos_cached.index_select(0, position_ids.to(self.cos_cached.device))
+        sin = self.sin_cached.index_select(0, position_ids.to(self.sin_cached.device))
+        # shapes: (L, head_dim)
+
+        # Broadcast to match leading dims of x
+        view_shape = [1] * (x.ndim - 2) + [cos.size(0), cos.size(1)]
+        cos = cos.view(*view_shape).to(dtype=x.dtype)
+        sin = sin.view(*view_shape).to(dtype=x.dtype)
+
+        return (x * cos) + (self._rotate_half(x) * sin)
+
+
 class ProjectEmbedding(nn.Module):
     """
     A clean helper module that wraps an embedding layer (Token, Positional, or Channel)
@@ -260,14 +371,18 @@ class InputEmbeddingLayer(nn.Module):
             )
 
             # Initialize position embedding
-            if pos_embedding_type == "sinusoidal":
+            if pos_embedding_type == "rope":
+                # RoPE encodes position by rotating Q/K inside time attention,
+                # so no additive position term is added at the input
+                self.pos_embed = None
+            elif pos_embedding_type == "sinusoidal":
                 pos_embed = SinusoidalPositionalEncoding(d_model=pos_dim, max_len=sequence_length)
+                self.pos_embed = ProjectEmbedding(pos_embed, in_dim=pos_dim, out_dim=embedding_dim)
             elif pos_embedding_type == "absolute":
                 pos_embed = LearnedPositionEmbedding(d_model=pos_dim, max_len=sequence_length)
+                self.pos_embed = ProjectEmbedding(pos_embed, in_dim=pos_dim, out_dim=embedding_dim)
             else:
                 raise ValueError(f"Unknown pos_embedding_type: {pos_embedding_type}")
-
-            self.pos_embed = ProjectEmbedding(pos_embed, in_dim=pos_dim, out_dim=embedding_dim)
 
             # Initialize channel embedding
             channel_embed = LearnedPositionEmbedding(d_model=chan_dim, max_len=n_channels)
@@ -286,6 +401,28 @@ class InputEmbeddingLayer(nn.Module):
                     out_dim=embedding_dim,
                 )
             )
+
+    def load_extra_label_inits(self) -> None:
+        """
+        Loads weights for any extra-label embedding whose spec has ``init_weights`` set,
+        copying the array into the underlying ``nn.Embedding``. Intended to be called
+        after the default random weight initialiser, so the loaded values are not clobbered.
+        """
+        for label, extra_embed in zip(self.extra_label_specs, self.extra_embeds):
+            path = getattr(label, "init_weights", None)
+            if not path:
+                continue
+            arr = np.load(str(path))
+            l_dim = label.label_dim or self.embedding_dim
+            expected = (label.n_classes, l_dim)
+            if arr.shape != expected:
+                raise ValueError(
+                    f"init_weights for label {label.name!r} at {path} has shape "
+                    f"{arr.shape}, expected {expected}."
+                )
+            base = extra_embed.base_module  # nn.Embedding
+            with torch.no_grad():
+                base.weight.copy_(torch.from_numpy(arr).to(base.weight.dtype))
 
     def forward(
         self,
@@ -321,6 +458,8 @@ class InputEmbeddingLayer(nn.Module):
             pos_embeddings = self.pos_embed(embeds_for_pos)  # embeds_for_pos not used in `forward()`
             pos_embeddings = rearrange(pos_embeddings, 'b c l d -> b l c d')
             embeddings = embeddings + pos_embeddings
+        # For pos_embedding_type == "rope", position is encoded via Q/K rotation
+        # inside the time-attention branch; no additive term is added here.
 
         # Get channel embeddings
         chan_embeddings = self.channel_embed(embeddings)  # embeddings not used in `forward()`

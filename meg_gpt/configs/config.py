@@ -1,7 +1,6 @@
 """Configuration class for MEG-GPT."""
 
 # Import packages
-import numpy as np
 from dataclasses import dataclass, field
 from omegaconf import DictConfig, OmegaConf
 from typing import Any, Dict, List, Optional
@@ -15,6 +14,7 @@ class InputEmbeddingConfig:
     token_embedding_dim: Optional[int] = None
     pos_embedding_dim: Optional[int] = None
     pos_embedding_type: str = "absolute"
+    rope_base: float = 10000.0
     channel_embedding_dim: Optional[int] = None
     extra_label_specs: Optional[List[Label]] = None
 
@@ -132,8 +132,9 @@ class MEGGPTConfig:
             if config.l_patched_b[i] is None:
                 config.l_patched_b[i] = config.n_patches_in[i]
 
-            if config.chan_attention_mask[i] is not None:
-                config.chan_attention_mask[i] = np.load(config.chan_attention_mask[i])
+            # chan_attention_mask stays as a list of paths (str | None) here;
+            # OmegaConf containers cannot hold ndarrays. The np.load step is
+            # done at the call site in meg_gpt.py just before TransformerDecoder.
 
         if self.sequence_length is None:
             self.sequence_length = config.n_patches_in[0] * config.patch_len_in[0]
@@ -148,6 +149,7 @@ class MEGGPTConfig:
         self._validate_decoder_config()
         self._validate_loss_config()
         self._validate_training_config()
+        self._validate_rope_compatibility()
 
     def _validate_base_config(self) -> None:
         assert self.sequence_length is not None, "sequence_length must be set"
@@ -158,10 +160,12 @@ class MEGGPTConfig:
         assert cfg.n_tokens is not None, "n_tokens must be set"
         assert cfg.n_tokens > 0, "n_tokens must be greater than 0"
         assert cfg.embedding_dim is not None, "embedding_dim must be set"
-        VALID_POS_EMBEDDING_TYPES = ["absolute", "sinusoidal"]
+        VALID_POS_EMBEDDING_TYPES = ["absolute", "sinusoidal", "rope"]
         assert (
             cfg.pos_embedding_type in VALID_POS_EMBEDDING_TYPES
         ), f"pos_embedding_type must be one of {VALID_POS_EMBEDDING_TYPES}"
+        if cfg.pos_embedding_type == "rope":
+            assert cfg.rope_base > 0, "rope_base must be positive"
 
     def _validate_decoder_config(self) -> None:
         cfg = self.transformer_decoder
@@ -260,3 +264,35 @@ class MEGGPTConfig:
         assert cfg.batch_size > 0, "batch_size must be greater than 0"
         assert cfg.n_epochs > 0, "n_epochs must be greater than 0"
         assert 0 < cfg.val_split < 1, "val_split must be between 0 and 1"
+
+    def _validate_rope_compatibility(self) -> None:
+        # Cross-check between input_embedding and transformer_decoder
+        # (only relevant when RoPE is selected as the position-embedding scheme)
+        emb = self.input_embedding
+        if emb.pos_embedding_type != "rope":
+            return
+
+        dec = self.transformer_decoder
+        head_dim = dec.model_dim // dec.n_heads
+        assert head_dim % 2 == 0, (
+            f"pos_embedding_type='rope' requires an even per-head dimension, "
+            f"but model_dim={dec.model_dim} // n_heads={dec.n_heads} = {head_dim}."
+        )
+
+        seq_len = self.sequence_length
+        bad_layers = []
+        for i in range(len(dec.n_patches_in)):
+            ok = (
+                dec.patch_len_in[i] == 1
+                and dec.patch_len_out[i] == 1
+                and dec.unpatched_len_in[i] == 0
+                and dec.n_patches_in[i] == seq_len
+            )
+            if not ok:
+                bad_layers.append(i)
+        assert not bad_layers, (
+            f"pos_embedding_type='rope' requires no patching, but the following "
+            f"decoder layers use patching: {bad_layers}. "
+            f"Each layer must have patch_len_in=patch_len_out=1, "
+            f"unpatched_len_in=0, and n_patches_in=sequence_length ({seq_len})."
+        )
