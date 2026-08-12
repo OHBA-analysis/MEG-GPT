@@ -11,6 +11,7 @@ class Label:
     name: str
     n_classes: int
     label_dim: Optional[int] = None
+    init_weights: Optional[str] = None  # path to .npy of shape (n_classes, label_dim)
 
     def __post_init__(self):
         self.validate()
