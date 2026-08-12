@@ -57,6 +57,8 @@ class DecoderLayer(nn.Module):
         dropout: float,
         norm_type: str,
         n_groups: int = None,
+        use_rope: bool = False,
+        rope_base: float = 10000.0,
     ):
         super().__init__()
         self.model_dim = model_dim
@@ -127,6 +129,8 @@ class DecoderLayer(nn.Module):
             l_unpatched_b=l_unpatched_b,
             l_patched_b=l_patched_b,
             attention_mask=None,
+            use_rope=use_rope,
+            rope_base=rope_base,
         )
 
         # ------------------------------------------------------------
@@ -266,6 +270,8 @@ class TransformerDecoder(nn.Module):
         dropout: float,
         norm_type: str,
         n_groups: Optional[int] = None,
+        use_rope: bool = False,
+        rope_base: float = 10000.0,
     ):
         super().__init__()
         self.n_layers = len(n_patches_out)
@@ -318,6 +324,8 @@ class TransformerDecoder(nn.Module):
                 dropout=dropout,
                 norm_type=norm_type,
                 n_groups=n_groups,
+                use_rope=use_rope,
+                rope_base=rope_base,
             )
             self.layers.append(layer)
 

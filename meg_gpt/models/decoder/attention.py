@@ -17,6 +17,8 @@ import torch.nn.functional as F
 from einops import rearrange
 from typing import Optional, Tuple, Union
 
+from meg_gpt.models.embeddings import RotaryEmbedding
+
 
 _logger = logging.getLogger(__name__)
 
@@ -263,6 +265,12 @@ class MultiHeadGASPAttention(nn.Module):
     ----------
     model_dim : int
         Model dimension per head.
+    use_rope : bool
+        If True, apply Rotary Position Embedding to Q and K along their
+        sequence axis after head splitting. Requires no patching:
+        ``patch_len_in == patch_len_out == 1`` and ``unpatched_len_in == 0``.
+    rope_base : float
+        Frequency base θ for RoPE. Default 10000.0.
     *args : Any
         See GASPAttention for descriptions of other parameters.
     """
@@ -280,6 +288,8 @@ class MultiHeadGASPAttention(nn.Module):
         l_unpatched_b: Optional[int] = None,
         l_patched_b: Optional[int] = None,
         attention_mask: Optional[Union[np.ndarray, torch.Tensor]] = None,
+        use_rope: bool = False,
+        rope_base: float = 10000.0,
     ):
         super().__init__()
         self.n_heads = n_heads
@@ -294,6 +304,23 @@ class MultiHeadGASPAttention(nn.Module):
 
         self.l_in = self.n_patches_in * self.patch_len_in
         self.l_out = self.n_patches_out * self.patch_len_out
+
+        # Rotary position embedding (applied to Q/K in forward)
+        self.use_rope = use_rope
+        if use_rope:
+            if patch_len_in != 1 or patch_len_out != 1 or unpatched_len_in != 0:
+                raise ValueError(
+                    "use_rope=True requires no patching, but got "
+                    f"patch_len_in={patch_len_in}, patch_len_out={patch_len_out}, "
+                    f"unpatched_len_in={unpatched_len_in}."
+                )
+            self.rotary_emb = RotaryEmbedding(
+                head_dim=self.key_dim,
+                max_len=self.l_in,
+                base=rope_base,
+            )
+        else:
+            self.rotary_emb = None
 
         _logger.info(f"Initialized MultiHeadGASPAttention layer.")
 
@@ -455,6 +482,22 @@ class MultiHeadGASPAttention(nn.Module):
         q = rearrange(q, "b l_out l_other (h k_d) -> b h l_out l_other k_d", h=self.n_heads)
         k = rearrange(k, "b l_in l_other (h k_d) -> b h l_in l_other k_d", h=self.n_heads)
         v = rearrange(v, "b l_in l_other (h k_d) -> b h l_in l_other k_d", h=self.n_heads)
+
+        # Apply rotary position embedding to Q and K (no patching, so patch
+        # index equals absolute time step). Queries take the last l_out
+        # positions (consistent with _perceiver_x); keys span [0, l_in).
+        if self.use_rope:
+            k_positions = torch.arange(self.l_in, device=k.device)
+            q_positions = torch.arange(
+                self.l_in - self.l_out, self.l_in, device=q.device
+            )
+            # Move the length axis next-to-last so apply() sees (..., L, k_d).
+            q_rot = rearrange(q, "b h l_out l_other k_d -> b h l_other l_out k_d")
+            k_rot = rearrange(k, "b h l_in l_other k_d -> b h l_other l_in k_d")
+            q_rot = self.rotary_emb.apply(q_rot, q_positions)
+            k_rot = self.rotary_emb.apply(k_rot, k_positions)
+            q = rearrange(q_rot, "b h l_other l_out k_d -> b h l_out l_other k_d")
+            k = rearrange(k_rot, "b h l_other l_in k_d -> b h l_in l_other k_d")
 
         # Pass through attention layer
         output = self.gasp_layer(q, k, v)
