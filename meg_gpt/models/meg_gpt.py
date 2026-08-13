@@ -33,6 +33,34 @@ logging.basicConfig(level=logging.INFO)
 _logger = logging.getLogger(__name__)
 
 
+def _install_legacy_module_alias(old: str = "ephys_gpt", new: str = "meg_gpt"):
+    """
+    Aliases the old package name to the current one for unpickling.
+
+    Checkpoints saved before the ``ephys_gpt`` -> ``meg_gpt`` rename store
+    fully-qualified class references (e.g. ``ephys_gpt.configs.config.Config``).
+    Unpickling them triggers ``import ephys_gpt``, which no longer exists. This
+    registers ``ephys_gpt`` and every ``ephys_gpt.*`` submodule as aliases of
+    the corresponding ``meg_gpt`` module in ``sys.modules`` so the unpickler
+    resolves the old paths to the same live module objects. No-op if ``old`` is
+    already importable.
+    """
+    import sys
+    import importlib
+    import pkgutil
+
+    if old in sys.modules:
+        return
+    new_pkg = importlib.import_module(new)
+    sys.modules[old] = new_pkg
+    for info in pkgutil.walk_packages(new_pkg.__path__, prefix=new + "."):
+        try:
+            module = importlib.import_module(info.name)
+        except Exception:  # pragma: no cover - best-effort aliasing
+            continue
+        sys.modules.setdefault(old + info.name[len(new):], module)
+
+
 _NO_DECAY_TYPES = (
     nn.Embedding,
     nn.LayerNorm,
@@ -436,6 +464,7 @@ class MEGGPTModule(pl.LightningModule):
             _logger.info(f"Loading model from checkpoint: {ckpt_path}")
 
             # Load Lightning checkpoint (safe on CPU)
+            _install_legacy_module_alias()  # alias the pre-rename package so legacy (ephys_gpt) pickles unpickle correctly
             ckpt = torch.load(ckpt_path, map_location=map_location, weights_only=False)
             # NOTE: Includes model weights, optimizer / scheduler / AMP states, and metadata.
 
