@@ -13,6 +13,7 @@ Mathematical Notation:
 # Import packages
 import logging
 import os
+import numpy as np
 import pytorch_lightning as pl
 import torch
 import torch.nn as nn
@@ -110,7 +111,10 @@ class MEGGPT(nn.Module):
             decoder_cfg.l_patched_b,
             decoder_cfg.do_chan_attention,
             decoder_cfg.do_cross_attention,
-            decoder_cfg.chan_attention_mask,
+            # OmegaConf can't hold ndarrays, so chan_attention_mask is stored
+            # as a list of file paths (or None); load to arrays here.
+            [np.load(p) if p is not None else None
+             for p in decoder_cfg.chan_attention_mask],
             decoder_cfg.chan_attn_chandim,
             decoder_cfg.full_channel_attention_dropout,
             decoder_cfg.channel_attention_channel_dropout,
@@ -120,6 +124,8 @@ class MEGGPT(nn.Module):
             decoder_cfg.dropout,
             decoder_cfg.norm_type,
             decoder_cfg.n_groups,
+            use_rope=(emb_cfg.pos_embedding_type == "rope"),
+            rope_base=emb_cfg.rope_base,
         )
 
         # Initialize prediction head layer
@@ -134,6 +140,10 @@ class MEGGPT(nn.Module):
 
         # Initialize model weights
         init_model_weights(self)
+
+        # Override extra-label embedding weights with any pre-computed
+        # initialisations provided via Label.init_weights
+        self.input_embedding_layer.load_extra_label_inits()
 
     def forward(
         self,
@@ -250,10 +260,8 @@ class MEGGPTModule(pl.LightningModule):
         """
         return self.model(x, extra_labels)
 
-    def training_step(self, batch, batch_idx):
-        """
-        Training step.
-        """
+    def _step(self, batch, stage: str):
+        """Shared logic for training_step and validation_step."""
         x = batch["data"]
         extra_label_specs = self.config.input_embedding.extra_label_specs
         extra_labels = [
@@ -268,43 +276,23 @@ class MEGGPTModule(pl.LightningModule):
             "sync_dist": self.config.training.multi_gpu,
         }
 
-        self.log("train/loss", outputs["total_loss"], **log_kwargs)
-        self.log("train/cross_entropy_loss", outputs["cross_entropy_loss"], **log_kwargs)
+        self.log(f"{stage}/loss", outputs["total_loss"], **log_kwargs)
+        self.log(f"{stage}/cross_entropy_loss", outputs["cross_entropy_loss"], **log_kwargs)
         # NOTE: on_epoch logs the mean across all steps (batches) in the epoch.
 
         # Automatically log all the sub-metrics from each loss layer
         for metric_name, metric_val in outputs["cross_entropy_metrics"].items():
-            self.log(f"train/{metric_name}", metric_val, **log_kwargs)
-        
+            self.log(f"{stage}/{metric_name}", metric_val, **log_kwargs)
+
         return outputs["total_loss"]
+
+    def training_step(self, batch, batch_idx):
+        """Training step."""
+        return self._step(batch, stage="train")
 
     def validation_step(self, batch, batch_idx):
-        """
-        Validation step.
-        """
-        x = batch["data"]
-        extra_label_specs = self.config.input_embedding.extra_label_specs
-        extra_labels = [
-            batch[label.name] for label in extra_label_specs
-        ] if extra_label_specs else []
-
-        outputs = self.forward(x, extra_labels)
-
-        log_kwargs = {
-            "on_step": False, "on_epoch": True, "prog_bar": True,
-            "batch_size": self.config.training.batch_size,
-            "sync_dist": self.config.training.multi_gpu,
-        }
-
-        self.log("val/loss", outputs["total_loss"], **log_kwargs)
-        self.log("val/cross_entropy_loss", outputs["cross_entropy_loss"], **log_kwargs)
-        # NOTE: on_epoch logs the mean across all steps (batches) in the epoch.
-
-        # Automatically log all the sub-metrics from each loss layer
-        for metric_name, metric_val in outputs["cross_entropy_metrics"].items():
-            self.log(f"val/{metric_name}", metric_val, **log_kwargs)
-
-        return outputs["total_loss"]
+        """Validation step."""
+        return self._step(batch, stage="val")
 
     def on_train_epoch_start(self):
         """
